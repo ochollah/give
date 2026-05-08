@@ -200,7 +200,7 @@
 
             if(confirm(`Authorize B2B Remittance of KES ${amount} to Organization HQ?`)) {
                 try {
-                    const response = await fetch(`${RENDER_URL}/api/remit`, {
+                    const response = await fetch(`${https://give-bzn3.onrender.com}/api/remit`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -330,7 +330,7 @@
 
             if(channel === 'MPESA') {
                 try {
-                    const response = await fetch(`${RENDER_URL}/api/stkpush`, {
+                    const response = await fetch(`${https://give-bzn3.onrender.com}/api/stkpush`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
