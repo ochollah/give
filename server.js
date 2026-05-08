@@ -42,7 +42,7 @@ app.post('/api/stkpush', async (req, res) => {
                 PartyA: phone,
                 PartyB: churchTill,
                 PhoneNumber: phone,
-                CallBackURL: "https://your-render-url.onrender.com/api/callback",
+                CallBackURL: "https://give-bzn3.onrender.com/api/callback",
                 AccountReference: accountRef,
                 TransactionDesc: "Tithes and Offering"
             },
@@ -72,8 +72,8 @@ app.post('/api/remit', async (req, res) => {
                 PartyB: hqTill,
                 AccountReference: "10_PERCENT_REMIT",
                 Remarks: "Weekly Church Remittance",
-                QueueTimeOutURL: "https://your-render-url.onrender.com/api/timeout",
-                ResultURL: "https://your-render-url.onrender.com/api/result"
+                QueueTimeOutURL: "https://give-bzn3.onrender.com/api/timeout",
+                ResultURL: "https://give-bzn3.onrender.com/api/result"
             },
             { headers: { Authorization: `Bearer ${token}` } }
         );
