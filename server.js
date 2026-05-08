@@ -4,6 +4,11 @@ const cors = require('cors');
 require('dotenv').config();
 
 const app = express();
+// Add this above your other routes
+app.get('/', (req, res) => {
+    res.status(200).send('FaithPay Engine is Live. Listening for M-Pesa Triggers.');
+});
+
 app.use(express.json());
 app.use(cors());
 
