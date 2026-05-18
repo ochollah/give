@@ -58,11 +58,9 @@ export default async function handler(req, res) {
             }
         });
 
-        let tokenData;
-        
-        // If Route A encounters a 400 routing block, trigger Route B: Standalone POST request
+        // If Route A encounters a routing block or error, trigger Route B: Standalone POST request
         if (!tokenResponse.ok) {
-            const fallbackResponse = await fetch('https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials', {
+            tokenResponse = await fetch('https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials', {
                 method: 'POST',
                 headers: { 
                     'Authorization': `Basic ${sandboxAuthToken}`,
@@ -70,18 +68,28 @@ export default async function handler(req, res) {
                     'Content-Length': '0'
                 }
             });
+        }
 
-            if (!fallbackResponse.ok) {
-                const errDump = await fallbackResponse.text();
-                return res.status(500).json({ 
-                    error: 'Daraja OAuth Failed', 
-                    status: fallbackResponse.status,
-                    details: errDump 
-                });
-            }
-            tokenData = await fallbackResponse.json();
-        } else {
-            tokenData = await tokenResponse.json();
+        // CRITICAL: Read as raw text first to prevent "Unexpected end of JSON input" crashes
+        const rawTextResponse = await tokenResponse.text();
+
+        if (!tokenResponse.ok) {
+            return res.status(500).json({ 
+                error: 'Daraja OAuth Gateway Rejection', 
+                status: tokenResponse.status,
+                details: rawTextResponse 
+            });
+        }
+
+        let tokenData;
+        try {
+            tokenData = JSON.parse(rawTextResponse);
+        } catch (parseError) {
+            return res.status(500).json({
+                error: 'Safaricom Sandbox Returned Non-JSON Content',
+                status: tokenResponse.status,
+                rawResponseSnippet: rawTextResponse.substring(0, 500)
+            });
         }
 
         const access_token = tokenData.access_token;
