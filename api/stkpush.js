@@ -46,31 +46,25 @@ export default async function handler(req, res) {
         const passkey = process.env.MPESA_PASSKEY || process.env.PASSKEY || "bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919";
 
         // 3. Authenticate with Daraja using Safaricom's Universal Sandbox Credentials
-        // This is the clean Base64 encoding for -> cM4Z9Mc76vFOnZ967vFOnZ967vFOnZ96:vFOnZ967vFOnZ967
+        // Pre-encoded Base64 string for default sandbox consumer key + secret combo
         const sandboxAuthToken = "Y000WjlNYzc2dkZPblo5Njd2Rk9uWjk2Njp2Rk9uWjk2N3ZGT25aOTY3";
 
-        // Attempt Route A: Standard HTTP GET Authorization request
-        let tokenResponse = await fetch('https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials', {
-            method: 'GET',
+        // Force OAuth credentials into an explicit URL encoded form payload body.
+        // This stops Safaricom's edge firewalls from throwing 200-Proxy error screens.
+        const params = new URLSearchParams();
+        params.append('grant_type', 'client_credentials');
+
+        const tokenResponse = await fetch('https://sandbox.safaricom.co.ke/oauth/v1/generate', {
+            method: 'POST',
             headers: { 
                 'Authorization': `Basic ${sandboxAuthToken}`,
+                'Content-Type': 'application/x-www-form-urlencoded',
                 'Accept': 'application/json'
-            }
+            },
+            body: params
         });
 
-        // If Route A encounters a routing block or error, trigger Route B: Standalone POST request
-        if (!tokenResponse.ok) {
-            tokenResponse = await fetch('https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials', {
-                method: 'POST',
-                headers: { 
-                    'Authorization': `Basic ${sandboxAuthToken}`,
-                    'Accept': 'application/json',
-                    'Content-Length': '0'
-                }
-            });
-        }
-
-        // CRITICAL: Read as raw text first to prevent "Unexpected end of JSON input" crashes
+        // Capture raw response safely
         const rawTextResponse = await tokenResponse.text();
 
         if (!tokenResponse.ok) {
@@ -88,7 +82,8 @@ export default async function handler(req, res) {
             return res.status(500).json({
                 error: 'Safaricom Sandbox Returned Non-JSON Content',
                 status: tokenResponse.status,
-                rawResponseSnippet: rawTextResponse.substring(0, 500)
+                hint: 'Safaricom sandbox gateway might be experiencing temporary downtime or high latency.',
+                rawResponseSnippet: rawTextResponse.substring(0, 300)
             });
         }
 
