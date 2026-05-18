@@ -3,164 +3,193 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FaithPay OS | Enterprise Edition 2026</title>
+    <title>FaithPay OS | M-PESA B2B & Ledger Edition</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;800&display=swap');
-        body { font-family: 'Plus Jakarta Sans', sans-serif; background: #F8FAFC; color: #0F172A; transition: all 0.5s ease; }
-        .view-section { display: none; min-height: 100vh; }
-        .view-section.active { display: block; animation: fadeIn 0.4s ease-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .glass { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(12px); border: 1px solid rgba(226, 232, 240, 0.8); border-radius: 2rem; }
-        .btn-primary { background: #4F46E5; color: white; font-weight: 800; transition: all 0.3s; box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.3); }
-        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 20px 25px -5px rgba(79, 70, 229, 0.4); }
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght=300;400;600;800&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background: #F8FAFC; color: #0F172A; scroll-behavior: smooth; }
+        .view-section { display: none; opacity: 0; transform: translateY(10px); transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+        .view-section.active { display: block; opacity: 1; transform: translateY(0); }
+        .card { background: white; border-radius: 2.5rem; border: 1px solid #E2E8F0; transition: all 0.3s ease; }
+        .card:hover { border-color: #6366F1; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.05); }
+        .btn-grad { background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%); color: white; font-weight: 800; transition: transform 0.2s; }
+        .btn-grad:active { transform: scale(0.95); }
+        canvas { max-height: 250px !important; width: 100% !important; }
+        body.authenticated #view-auth { display: none !important; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #E2E8F0; border-radius: 10px; }
     </style>
 </head>
 <body>
 
-    <nav id="app-nav" class="hidden sticky top-0 z-[100] bg-white/80 backdrop-blur-md border-b px-6 py-4">
+    <nav class="sticky top-0 z-[100] bg-white/80 backdrop-blur-2xl border-b p-5">
         <div class="max-w-7xl mx-auto flex justify-between items-center">
             <div class="flex items-center space-x-3">
-                <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-black">FP</div>
-                <h1 class="text-xl font-black tracking-tighter uppercase">Faith<span class="text-indigo-600">Pay</span></h1>
+                <div class="w-10 h-10 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-black italic shadow-lg shadow-indigo-200">F</div>
+                <h1 class="text-2xl font-black italic uppercase tracking-tighter">Faith<span class="text-indigo-600">Pay</span></h1>
             </div>
-            <div class="flex items-center space-x-6">
-                <div id="loc-indicator" class="hidden sm:flex items-center text-[10px] font-black bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full border border-emerald-100 uppercase">
-                    <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full mr-2 animate-pulse"></span> GPS Linked
+            <div id="nav-controls" class="hidden flex items-center space-x-6">
+                <div class="text-right pr-6 border-r-2 border-slate-100">
+                    <p id="u-name" class="text-sm font-black text-slate-900"></p>
+                    <p id="u-role" class="text-[10px] text-indigo-500 font-black uppercase tracking-widest"></p>
                 </div>
-                <div class="text-right">
-                    <p id="nav-user-name" class="text-xs font-extrabold"></p>
-                    <p id="nav-user-role" class="text-[9px] text-indigo-500 font-black uppercase tracking-widest"></p>
-                </div>
-                <button onclick="globalLogout()" class="p-2 bg-slate-50 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600 transition">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
-                </button>
+                <button onclick="handleLogout()" class="text-xs font-black text-red-500 hover:text-red-700 transition uppercase">Logout</button>
             </div>
         </div>
     </nav>
 
-    <section id="view-auth" class="view-section active flex items-center justify-center">
-        <div class="w-full max-w-md p-10 glass shadow-2xl">
+    <!-- AUTH SECTION -->
+    <section id="view-auth" class="view-section active flex items-center justify-center min-h-[85vh] p-6">
+        <div class="card w-full max-w-md p-12 shadow-2xl border-indigo-50">
             <div class="text-center mb-10">
-                <h2 id="auth-title" class="text-4xl font-black text-slate-900">Portal Access</h2>
-                <p id="auth-sub" class="text-slate-400 font-medium mt-2">Ministry Financial OS</p>
+                <h2 id="auth-t" class="text-4xl font-black italic">Welcome</h2>
+                <p class="text-slate-400 text-[10px] font-black uppercase tracking-widest mt-2">Ministry Financial Gateway</p>
             </div>
-            <form id="auth-form" class="space-y-4">
-                <div id="reg-fields" class="hidden"><input type="text" id="auth-name" placeholder="Full Name" class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:ring-2 ring-indigo-500 mb-4"></div>
-                <input type="email" id="auth-email" placeholder="Email Address" required class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:ring-2 ring-indigo-500">
-                <input type="password" id="auth-pass" placeholder="Security Password" required class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:ring-2 ring-indigo-500">
-                <button type="submit" class="w-full btn-primary py-4 rounded-2xl">AUTHENTICATE</button>
+            <form id="auth-form" class="space-y-5">
+                <div id="reg-fields" class="hidden animate-pulse">
+                    <input type="text" id="r-name" placeholder="Full Name" class="w-full p-5 bg-slate-50 rounded-2xl font-bold border-none outline-none focus:ring-2 ring-indigo-500">
+                </div>
+                <input type="email" id="a-email" placeholder="Email Address" required class="w-full p-5 bg-slate-50 rounded-2xl font-bold border-none outline-none focus:ring-2 ring-indigo-500">
+                <input type="password" id="a-pass" placeholder="Secure Password" required class="w-full p-5 bg-slate-50 rounded-2xl font-bold border-none outline-none focus:ring-2 ring-indigo-500">
+                <button type="submit" class="w-full btn-grad py-5 rounded-2xl uppercase tracking-widest text-xs shadow-xl shadow-indigo-100">Access Portal</button>
             </form>
-            <button onclick="toggleAuth()" class="w-full mt-8 text-xs font-black text-slate-400 hover:text-indigo-600 uppercase tracking-widest">Switch Registration / Login</button>
+            <button onclick="toggleAuth()" class="w-full mt-8 text-[10px] font-black text-indigo-400 uppercase tracking-widest hover:text-indigo-600 transition">Create New Identity</button>
         </div>
     </section>
 
-    <section id="view-super" class="view-section max-w-7xl mx-auto p-6">
-        <div class="flex justify-between items-center mb-12">
-            <div><h2 class="text-5xl font-black tracking-tighter">Global Audit</h2><p class="text-slate-400 font-bold">Cross-Network Financial Ledger</p></div>
-            <div class="flex space-x-3">
-                <button onclick="generateForensicReport('Global')" class="bg-slate-900 text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase">Generate Master Report</button>
-                <button onclick="openModal('modal-church')" class="btn-primary px-6 py-3 rounded-xl font-black text-[10px] uppercase">+ Provision Church</button>
-            </div>
+    <!-- SUPER ADMIN DASHBOARD -->
+    <section id="view-super" class="view-section p-8 max-w-7xl mx-auto">
+        <div class="flex flex-col md:flex-row justify-between items-center mb-12 gap-6">
+            <h2 class="text-4xl font-black italic">Global <span class="text-indigo-600">Network</span></h2>
+            <button onclick="openM()" class="btn-grad px-10 py-5 rounded-2xl text-xs uppercase shadow-2xl">+ Provision Church</button>
         </div>
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div class="lg:col-span-2 space-y-4" id="super-church-list"></div>
-            <div class="space-y-6">
-                <div class="glass p-8 bg-slate-900 text-white">
-                    <p class="text-slate-400 text-[10px] font-black uppercase tracking-widest">Ecosystem Volume</p>
-                    <h3 class="text-4xl font-black mt-2">KES <span id="stat-total-val">0</span></h3>
-                    <canvas id="super-line-chart" class="mt-8"></canvas>
-                </div>
-                <div class="glass p-8">
-                    <h3 class="text-xs font-black text-slate-400 uppercase mb-6">Pending 10% Remittances</h3>
-                    <div id="super-remit-feed" class="space-y-3"></div>
+        <div class="grid lg:grid-cols-3 gap-10">
+            <div class="lg:col-span-2 space-y-8">
+                <div id="super-church-list" class="space-y-5"></div>
+                <!-- Remittance Ledger -->
+                <div class="card p-10">
+                    <h3 class="text-[10px] font-black uppercase text-slate-400 mb-6 tracking-widest">Weekly Remittance Ledger</h3>
+                    <div id="remittance-ledger" class="space-y-3"></div>
                 </div>
             </div>
-        </div>
-    </section>
-
-    <section id="view-church" class="view-section max-w-7xl mx-auto p-6">
-        <div class="flex justify-between items-end mb-12">
-            <div><h2 id="ch-title" class="text-5xl font-black tracking-tighter uppercase">...</h2><p id="ch-meta" class="text-slate-400 font-bold"></p></div>
-            <div class="glass p-6 text-right border-l-4 border-red-500">
-                <p class="text-[10px] text-slate-400 font-black uppercase">Required 10% Remittance</p>
-                <h4 id="ch-remit-val" class="text-2xl font-black text-red-600">KES 0</h4>
-                <button onclick="triggerRemittanceB2B()" class="mt-3 bg-red-600 text-white px-5 py-2 rounded-full font-black text-[10px] uppercase shadow-lg shadow-red-200">Remit via B2B</button>
-            </div>
-        </div>
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div class="glass p-10">
-                <div class="flex justify-between items-center mb-8">
-                    <h3 class="font-black text-xs uppercase text-slate-400">Multi-Channel Collection</h3>
-                    <button onclick="generateForensicReport('Church')" class="text-indigo-600 font-black text-[10px] uppercase">Export PDF</button>
-                </div>
-                <canvas id="church-pie-chart"></canvas>
-            </div>
-            <div class="glass p-8">
-                <h3 class="font-black text-xs uppercase text-slate-400 mb-8">Real-time Giving Stream</h3>
-                <div id="ch-stream" class="space-y-4 max-h-[400px] overflow-y-auto pr-2"></div>
+            <div class="card p-10 bg-slate-900 text-white shadow-2xl h-fit sticky top-24">
+                <h3 class="text-[10px] font-black uppercase text-indigo-400 mb-8 tracking-widest">Network Analytics</h3>
+                <canvas id="super-chart"></canvas>
+                <button onclick="downloadReceipt('Global Statement', window.currentChurches)" class="w-full mt-10 py-4 bg-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest">Export Master PDF</button>
             </div>
         </div>
     </section>
 
-    <section id="view-member" class="view-section max-w-7xl mx-auto p-6">
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-10">
-            <div class="lg:col-span-5 glass p-10 h-fit sticky top-24">
-                <h3 class="text-3xl font-black mb-8 italic">Support Ministry</h3>
-                <div class="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl mb-6">
-                    <p class="text-[10px] font-black text-indigo-400 uppercase">Geographical Context</p>
-                    <p id="mem-loc-context" class="font-extrabold text-indigo-800 text-sm">Locating nearest church...</p>
+    <!-- CHURCH DASHBOARD (PASTOR) -->
+    <section id="view-church" class="view-section p-8 max-w-7xl mx-auto">
+        <div class="flex flex-col md:flex-row justify-between items-end mb-12 gap-6">
+            <div>
+                <h2 id="c-display-name" class="text-5xl font-black italic tracking-tighter">Church Hub</h2>
+                <p class="text-slate-400 text-xs font-black uppercase mt-2">Org Remittance Address: <span class="text-indigo-600 font-extrabold italic">Till 999999</span></p>
+            </div>
+            <button onclick="downloadReceipt('Church Revenue Statement', window.currentGivings)" class="px-8 py-4 bg-white border-2 border-slate-100 rounded-2xl text-[10px] font-black uppercase">Download Statement</button>
+        </div>
+
+        <div class="grid md:grid-cols-3 gap-8 mb-10">
+            <div class="card p-8 border-indigo-100 bg-white">
+                <h4 class="text-[10px] font-black uppercase text-indigo-600 mb-4">Last Week 5% B2B</h4>
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-xs font-bold text-slate-500">Gross Contribution</span>
+                    <span class="text-md font-black italic">KES <span id="lw-total">0</span></span>
                 </div>
-                <form id="mem-give-form" class="space-y-4">
-                    <select id="give-cat" class="w-full p-4 bg-slate-50 border rounded-2xl font-bold">
-                        <option>Tithe</option><option>Offering</option><option>Building Fund</option><option>Mission Support</option>
-                    </select>
-                    <input type="number" id="give-amt" placeholder="Amount (KES)" required class="w-full p-4 bg-slate-50 border rounded-2xl font-black text-2xl text-indigo-600">
-                    <input type="text" id="give-phone" placeholder="2547XXXXXXXX" required class="w-full p-4 bg-slate-50 border rounded-2xl font-bold">
-                    <div class="p-4 bg-white border rounded-2xl">
-                        <p class="text-[10px] font-black text-slate-400 uppercase mb-3">Payment Channel</p>
-                        <div class="flex space-x-4">
-                            <label class="flex items-center space-x-2 cursor-pointer">
-                                <input type="radio" name="channel" value="MPESA" checked class="w-4 h-4 text-indigo-600">
-                                <span class="text-sm font-bold">M-Pesa (C2B)</span>
-                            </label>
-                            <label class="flex items-center space-x-2 cursor-pointer">
-                                <input type="radio" name="channel" value="CASH" class="w-4 h-4 text-indigo-600">
-                                <span class="text-sm font-bold">Cash/Bank</span>
-                            </label>
+                <div class="flex justify-between items-center mb-4">
+                    <span class="text-xs font-bold text-slate-500">5% Remittance</span>
+                    <span class="text-md font-black italic text-indigo-600">KES <span id="lw-5per">0</span></span>
+                </div>
+                <div id="b2b-action-area">
+                    <button id="btn-initiate-b2b" class="w-full py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase">Initiate B2B Payment</button>
+                </div>
+                <p id="lw-status" class="hidden text-center text-[10px] font-black uppercase mt-4 text-green-500">✓ Remitted to Org</p>
+            </div>
+
+            <div class="card p-8 border-slate-100 bg-slate-50">
+                <h4 class="text-[10px] font-black uppercase text-slate-400 mb-4">Weekly Balance</h4>
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-xs font-bold text-slate-500">Net Remaining</span>
+                    <span class="text-md font-black italic text-slate-900">KES <span id="lw-remaining">0</span></span>
+                </div>
+                <p class="text-[9px] text-slate-400 mt-2 italic">Deducted 5% Org share from Weekly total.</p>
+            </div>
+
+            <div class="card p-8 border-indigo-50 bg-indigo-50/50">
+                <h4 class="text-[10px] font-black uppercase text-indigo-400 mb-4">This Week (Live)</h4>
+                <div class="flex justify-between items-center">
+                    <span class="text-xs font-bold text-slate-500">Collection</span>
+                    <span class="text-md font-black italic text-indigo-600">KES <span id="tw-total">0</span></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid lg:grid-cols-3 gap-10 mb-10">
+            <div class="card p-12 bg-indigo-600 text-white shadow-2xl relative overflow-hidden">
+                <p class="text-[10px] font-black opacity-70 mb-2 uppercase tracking-widest">Total Lifetime</p>
+                <div class="text-5xl font-black italic">KES <span id="c-total">0</span></div>
+            </div>
+            <div class="lg:col-span-2 card p-10"><canvas id="c-chart"></canvas></div>
+        </div>
+
+        <div class="grid lg:grid-cols-2 gap-10">
+            <div class="card p-10">
+                <h3 class="text-[10px] font-black text-slate-400 mb-8 uppercase tracking-widest">Member Weekly Contribution Breakdown</h3>
+                <div id="c-member-list" class="space-y-4"></div>
+            </div>
+            <div class="card p-10"><canvas id="c-trend"></canvas></div>
+        </div>
+    </section>
+
+    <!-- MEMBER DASHBOARD -->
+    <section id="view-member" class="view-section p-8 max-w-7xl mx-auto">
+        <div class="grid lg:grid-cols-12 gap-12">
+            <div class="lg:col-span-5">
+                <div class="card p-12 shadow-2xl border-indigo-50 sticky top-24">
+                    <h2 class="text-3xl font-black mb-10 italic tracking-tight">Submit Offering</h2>
+                    <form id="g-form" class="space-y-5">
+                        <select id="g-dest" required class="w-full p-5 bg-slate-50 rounded-2xl font-black border-none outline-none focus:ring-2 ring-indigo-500"></select>
+                        <div class="grid grid-cols-2 gap-5">
+                            <select id="g-type" class="p-5 bg-slate-50 rounded-2xl font-black border-none outline-none"><option>Tithe</option><option>Offering</option><option>Seed</option></select>
+                            <input type="number" id="g-amt" placeholder="KES Amount" required class="p-5 bg-slate-50 rounded-2xl font-black text-indigo-600 border-none outline-none">
                         </div>
-                    </div>
-                    <button type="submit" class="w-full btn-primary py-5 rounded-2xl uppercase tracking-widest font-black">Authorize Giving</button>
-                </form>
-            </div>
-            <div class="lg:col-span-7 space-y-8">
-                <div class="glass p-10">
-                    <div class="flex justify-between items-center mb-8">
-                        <h3 class="text-2xl font-black italic">Personal Statement</h3>
-                        <button onclick="generateForensicReport('Personal')" class="text-indigo-600 font-black text-[10px] uppercase">Download Statement</button>
-                    </div>
-                    <canvas id="mem-bar-chart" class="mb-10"></canvas>
-                    <div id="mem-history" class="space-y-3"></div>
+                        <div class="flex bg-slate-100 p-2 rounded-2xl">
+                            <button type="button" onclick="setMethod('MPESA')" id="bm" class="flex-1 py-4 rounded-xl font-black text-[10px] bg-white text-indigo-600 shadow-sm uppercase">M-PESA</button>
+                            <button type="button" onclick="setMethod('CASH')" id="bc" class="flex-1 py-4 rounded-xl font-black text-[10px] text-slate-400 uppercase">CASH</button>
+                        </div>
+                        <input type="hidden" id="g-method" value="MPESA">
+                        <div id="mp-box"><input type="tel" id="g-phone" placeholder="M-Pesa Number (254...)" class="w-full p-5 bg-slate-50 rounded-2xl font-bold border-none outline-none"></div>
+                        <button type="submit" class="w-full btn-grad py-6 rounded-2xl uppercase font-black text-xs">Authorize Gift</button>
+                    </form>
                 </div>
+            </div>
+            <div class="lg:col-span-7">
+                <div class="flex justify-between items-center mb-8">
+                    <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-widest">My Personal Ledger</h3>
+                    <button onclick="downloadReceipt('Personal History', window.currentGivings)" class="text-[10px] font-black text-indigo-600 underline uppercase">Download PDF</button>
+                </div>
+                <div class="card p-10 mb-8"><canvas id="m-chart"></canvas></div>
+                <div id="m-history" class="space-y-3"></div>
             </div>
         </div>
     </section>
 
-    <div id="modal-church" class="hidden fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[200] flex items-center justify-center p-4">
-        <div class="bg-white w-full max-w-lg p-12 rounded-[3rem] shadow-2xl">
-            <h3 class="text-2xl font-black mb-8">Provision Ministry Node</h3>
-            <form id="form-church-crud" class="space-y-4">
-                <input type="text" id="c-name" placeholder="Church Name" required class="w-full p-4 bg-slate-50 border rounded-2xl font-bold">
-                <input type="text" id="c-loc" placeholder="City/Location" required class="w-full p-4 bg-slate-50 border rounded-2xl font-bold">
-                <input type="email" id="c-admin" placeholder="Admin Email" required class="w-full p-4 bg-slate-50 border rounded-2xl font-bold">
-                <input type="text" id="c-till" placeholder="Lipa Na M-Pesa Till No" required class="w-full p-4 bg-slate-50 border rounded-2xl font-bold">
-                <div class="flex space-x-3 pt-6">
-                    <button type="button" onclick="closeModal('modal-church')" class="flex-1 font-bold text-slate-400">Cancel</button>
-                    <button type="submit" class="flex-1 btn-primary py-4 rounded-2xl">Deploy Node</button>
-                </div>
+    <!-- MODAL -->
+    <div id="m-box" class="hidden fixed inset-0 bg-slate-900/80 backdrop-blur-xl z-[200] flex items-center justify-center p-6">
+        <div class="card w-full max-w-2xl p-12 shadow-2xl border-none">
+            <h3 class="text-3xl font-black mb-10 italic">Node Config</h3>
+            <form id="c-form" class="grid grid-cols-2 gap-6">
+                <input type="hidden" id="c-id">
+                <input type="text" id="cn-name" placeholder="Church Name" required class="col-span-2 p-5 bg-slate-50 rounded-2xl font-bold border-none outline-none focus:ring-2 ring-indigo-500">
+                <input type="text" id="cn-loc" placeholder="Location" required class="p-5 bg-slate-50 rounded-2xl font-bold border-none outline-none">
+                <input type="email" id="cn-admin" placeholder="Admin Email" required class="p-5 bg-slate-50 rounded-2xl font-bold border-none outline-none">
+                <input type="text" id="cn-pay" placeholder="Paybill No" class="p-5 bg-slate-50 rounded-2xl font-bold border-none outline-none">
+                <input type="text" id="cn-till" placeholder="M-Pesa Till" class="p-5 bg-slate-50 rounded-2xl font-bold border-none outline-none">
+                <button type="submit" class="col-span-2 btn-grad py-6 rounded-2xl uppercase font-black text-xs">Save Church</button>
+                <button type="button" onclick="closeM()" class="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mt-4">Close</button>
             </form>
         </div>
     </div>
@@ -168,202 +197,346 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, setDoc, doc, getDoc, getDocs, onSnapshot, query, where, orderBy, serverTimestamp, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, setDoc, doc, getDoc, getDocs, onSnapshot, query, where, serverTimestamp, updateDoc, deleteDoc, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         const firebaseConfig = {
-  apiKey: "AIzaSyDcALTWoM4-gRglFIM1CYkZ1oHJ8iWZtOM",
-  authDomain: "giving-85453.firebaseapp.com",
-  projectId: "giving-85453",
-  storageBucket: "giving-85453.firebasestorage.app",
-  messagingSenderId: "670389879753",
-  appId: "1:670389879753:web:8e490457c88214f00f1e18",
-  measurementId: "G-LW1P03ZE5P"
-};;
+            apiKey: "AIzaSyDcALTWoM4-gRglFIM1CYkZ1oHJ8iWZtOM",
+            authDomain: "giving-85453.firebaseapp.com",
+            projectId: "giving-85453",
+            storageBucket: "giving-85453.firebasestorage.app",
+            messagingSenderId: "670389879753",
+            appId: "1:670389879753:web:8e490457c88214f00f1e18",
+            measurementId: "G-LW1P03ZE5P"
+        };
+
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-const RENDER_URL = "https://give-bzn3.onrender.com"; // Remove any trailing slashes
 
-        let activeUser = null;
-        let isReg = false;
-        let detectedChurch = null;
-        const RENDER_URL = "https://faithpay-engine.onrender.com";
+        // --- CHANGE THIS TO MATCH YOUR VERCEL API DOMAIN ---
+        const VERCEL_BACKEND_URL = "https://your-app.vercel.app";
 
-        window.toggleAuth = () => { isReg = !isReg; document.getElementById('reg-fields').classList.toggle('hidden'); };
-        window.globalLogout = () => signOut(auth).then(() => location.reload());
-        window.openModal = (id) => document.getElementById(id).classList.remove('hidden');
-        window.closeModal = (id) => document.getElementById(id).classList.add('hidden');
+        window.currentGivings = [];
+        window.currentChurches = [];
+        let charts = {};
+        let isRegistering = false;
 
-        // B2B TRIGGER: CHURCH TO HQ
-        window.triggerRemittanceB2B = async () => {
-            const amountVal = document.getElementById('ch-remit-val').innerText.replace('KES ', '').replace(/,/g, '');
-            const amount = parseFloat(amountVal);
-
-            if(confirm(`Authorize B2B Remittance of KES ${amount} to Organization HQ?`)) {
-                try {
-                    const response = await fetch(`${https://give-bzn3.onrender.com}/api/remit`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            amount: amount,
-                            churchShortCode: detectedChurch.till // Logic uses church till as sender
-                        })
-                    });
-                    const data = await response.json();
-                    alert("B2B Remittance Initiated via Daraja Engine.");
-                } catch (err) {
-                    alert("Remittance API Error: Ensure Render server is awake.");
-                }
-            }
+        const getWeekKey = (d) => {
+            d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+            d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+            let yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+            return `${d.getUTCFullYear()}-${Math.ceil((((d - yearStart) / 86400000) + 1) / 7)}`;
         };
 
-        window.generateForensicReport = async (scope) => {
-            const { jsPDF } = window.jspdf;
-            const pdf = new jsPDF();
-            let q = collection(db, "givings");
-            if(scope === 'Personal') q = query(q, where("uid", "==", activeUser.uid));
-            else if(scope === 'Church') q = query(q, where("churchId", "==", activeUser.churchId));
-            const snap = await getDocs(q);
-            const rows = snap.docs.map(d => [new Date(d.data().createdAt?.seconds * 1000).toLocaleDateString(), d.data().category, d.data().channel || 'CASH', `KES ${d.data().amount.toLocaleString()}`]);
-            pdf.setFontSize(18); pdf.text(`FaithPay ${scope} Audit Report`, 14, 20);
-            pdf.autoTable({ startY: 30, head: [['Date', 'Category', 'Channel', 'Amount']], body: rows });
-            pdf.save(`FaithPay_${scope}.pdf`);
+        const curWeek = getWeekKey(new Date());
+        const prevDate = new Date(); prevDate.setDate(prevDate.getDate() - 7);
+        const prevWeek = getWeekKey(prevDate);
+
+        window.showView = (id) => { 
+            document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
         };
 
-        window.deleteChurch = async (id) => { if(confirm("Forensic Wipe of Node?")) await deleteDoc(doc(db, "churches", id)); };
+        window.toggleAuth = () => {
+            isRegistering = !isRegistering;
+            document.getElementById('reg-fields').classList.toggle('hidden');
+            document.getElementById('auth-t').innerText = isRegistering ? "Registration" : "Welcome";
+        };
 
+        window.setMethod = (v) => {
+            document.getElementById('g-method').value = v;
+            document.getElementById('mp-box').style.display = v === 'MPESA' ? 'block' : 'none';
+            document.getElementById('bm').className = v === 'MPESA' ? 'flex-1 py-4 rounded-xl font-black text-[10px] bg-white text-indigo-600 shadow-sm transition-all uppercase' : 'flex-1 py-4 rounded-xl font-black text-[10px] text-slate-400 uppercase';
+            document.getElementById('bc').className = v === 'CASH' ? 'flex-1 py-4 rounded-xl font-black text-[10px] bg-white text-indigo-600 shadow-sm transition-all uppercase' : 'flex-1 py-4 rounded-xl font-black text-[10px] text-slate-400 uppercase';
+        };
+
+        window.handleLogout = () => signOut(auth).then(() => location.reload());
+
+        function syncChart(id, type, labels, data, label) {
+            const ctx = document.getElementById(id); if (!ctx) return;
+            if (charts[id]) charts[id].destroy();
+            charts[id] = new Chart(ctx, { 
+                type, data: { labels, datasets: [{ label, data, backgroundColor: ['#6366F1', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'], borderRadius: 12 }] },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+        }
+
+        window.downloadReceipt = (title, dataList) => {
+            if (!dataList || dataList.length === 0) return alert("Dataset empty");
+            const element = document.createElement('div');
+            element.style.padding = '40px';
+            element.innerHTML = `<h1 style="color:#4F46E5;font-weight:bold">${title}</h1><p>Generated: ${new Date().toLocaleString()}</p><hr>` + 
+                dataList.map(i => `<p>${i.userName || i.name}: KES ${i.amount || 0} [${i.week || 'Global'}]</p>`).join('');
+            html2pdf().from(element).save(`${title}.pdf`);
+        };
+
+        // --- AUTH ---
         document.getElementById('auth-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const em = document.getElementById('auth-email').value;
-            const pw = document.getElementById('auth-pass').value;
+            const em = document.getElementById('a-email').value;
+            const ps = document.getElementById('a-pass').value;
             try {
-                if(isReg) {
-                    const res = await createUserWithEmailAndPassword(auth, em, pw);
-                    await setDoc(doc(db, "users", res.user.uid), { name: document.getElementById('auth-name').value || em, role: 'member', createdAt: serverTimestamp() });
-                } else await signInWithEmailAndPassword(auth, em, pw);
-            } catch(e) { alert(e.message); }
+                if (isRegistering) {
+                    const c = await createUserWithEmailAndPassword(auth, em, ps);
+                    await setDoc(doc(db, "users", c.user.uid), { name: document.getElementById('r-name').value, email: em, role: 'member', status: 'active', createdAt: serverTimestamp() });
+                } else await signInWithEmailAndPassword(auth, em, ps);
+            } catch (err) { alert(err.message); }
         });
 
         async function route(uid) {
             const snap = await getDoc(doc(db, "users", uid));
-            activeUser = { uid, ...snap.data() };
-            document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
-            document.getElementById('view-auth').classList.remove('active');
-            document.getElementById('app-nav').classList.remove('hidden');
-            document.getElementById('nav-user-name').innerText = activeUser.name;
-            document.getElementById('nav-user-role').innerText = activeUser.role.replace('_', ' ');
-
-            if(activeUser.role === 'super_admin') {
-                document.getElementById('view-super').classList.add('active');
-                initSuper();
-            } else if(activeUser.role === 'church_admin') {
-                document.getElementById('view-church').classList.add('active');
-                initChurch(activeUser.churchId);
-            } else {
-                document.getElementById('view-member').classList.add('active');
-                initMember();
-            }
+            if (!snap.exists()) return;
+            const u = snap.data();
+            document.getElementById('u-name').innerText = u.name;
+            document.getElementById('u-role').innerText = u.role.replace('_', ' ');
+            document.getElementById('nav-controls').classList.remove('hidden');
+            document.body.classList.add('authenticated');
+            if (u.role === 'super_admin') initSuper();
+            else if (u.role === 'church_admin') initChurch(u.churchId);
+            else initMember(uid);
         }
 
+        // --- SUPER ADMIN ---
         function initSuper() {
-            onSnapshot(collection(db, "churches"), (snap) => {
-                const list = document.getElementById('super-church-list');
-                if(!list) return;
-                list.innerHTML = '';
-                snap.forEach(d => {
-                    const c = d.data();
-                    list.innerHTML += `<div class="glass p-6 flex justify-between items-center"><div><h4 class="font-black">${c.name}</h4><p class="text-[10px] text-slate-400 font-bold uppercase">${c.location}</p></div><button onclick="deleteChurch('${d.id}')" class="text-[10px] font-black text-red-500">DELETE</button></div>`;
-                });
+            showView('view-super');
+            onSnapshot(collection(db, "churches"), async (s) => {
+                const list = document.getElementById('super-church-list'); list.innerHTML = '';
+                const ledger = document.getElementById('remittance-ledger'); ledger.innerHTML = '';
+                window.currentChurches = [];
+                let labels = [], totals = [];
+                
+                for (const d of s.docs) {
+                    const c = { id: d.id, ...d.data() }; 
+                    window.currentChurches.push(c);
+                    const gs = await getDocs(query(collection(db, "givings"), where("churchId", "==", d.id)));
+                    let lw = 0, tw = 0, full = 0;
+                    gs.forEach(g => {
+                        const data = g.data();
+                        full += data.amount;
+                        if(data.week === prevWeek) lw += data.amount;
+                        if(data.week === curWeek) tw += data.amount;
+                    });
+                    labels.push(c.name); totals.push(full);
+
+                    const rSnap = await getDoc(doc(db, "remittances", `${d.id}_${prevWeek}`));
+                    const isRemitted = rSnap.exists() && rSnap.data().status === 'remitted';
+
+                    list.innerHTML += `<div class="card p-8 flex justify-between items-center">
+                        <div class="flex-1"><h4 class="font-black italic uppercase">${c.name}</h4>
+                            <div class="flex gap-4 mt-2 text-[9px] font-bold"><span>Last Week: KES ${lw}</span><span class="text-indigo-600">This Week: KES ${tw}</span></div>
+                        </div>
+                        <div class="flex gap-2">
+                             <button onclick="editC('${d.id}')" class="text-[9px] font-black uppercase text-slate-400">Edit</button>
+                             <button onclick="delC('${d.id}')" class="text-[9px] font-black uppercase text-red-500">Del</button>
+                        </div>
+                    </div>`;
+
+                    ledger.innerHTML += `<div class="p-4 bg-slate-50 rounded-xl flex justify-between items-center">
+                        <span class="text-[10px] font-black uppercase">${c.name} (${prevWeek})</span>
+                        <span class="${isRemitted ? 'text-green-500' : 'text-orange-500'} text-[9px] font-black uppercase">${isRemitted ? 'Paid KES ' + (lw*0.05).toLocaleString() : 'Outstanding'}</span>
+                    </div>`;
+                }
+                syncChart('super-chart', 'bar', labels, totals, 'Total Volume');
             });
-            onSnapshot(collection(db, "givings"), (snap) => {
-                let total = 0; snap.forEach(d => total += d.data().amount);
-                const el = document.getElementById('stat-total-val');
-                if(el) el.innerText = total.toLocaleString();
-            });
-            renderChart('super-line-chart', 'line', ['W1','W2','W3','W4'], [10, 45, 30, 80], '#fff');
         }
 
-        async function initChurch(churchId) {
-            const cSnap = await getDoc(doc(db, "churches", churchId));
-            detectedChurch = { id: cSnap.id, ...cSnap.data() };
-            document.getElementById('ch-title').innerText = detectedChurch.name;
-            document.getElementById('ch-meta').innerText = `${detectedChurch.location} | TILL: ${detectedChurch.till}`;
+        window.delC = (id) => confirm("Delete Church?") && deleteDoc(doc(db, "churches", id));
+        window.editC = async (id) => {
+            const d = await getDoc(doc(db, "churches", id));
+            document.getElementById('c-id').value = id;
+            document.getElementById('cn-name').value = d.data().name;
+            openM();
+        };
+
+        // --- PASTOR DASHBOARD ---
+        function initChurch(cId) {
+            showView('view-church');
             
-            onSnapshot(query(collection(db, "givings"), where("churchId", "==", churchId)), (snap) => {
-                const stream = document.getElementById('ch-stream');
-                if(!stream) return;
-                stream.innerHTML = '';
-                let total = 0; let cats = { Tithe: 0, Offering: 0, 'Building Fund': 0, 'Mission Support': 0 };
-                snap.forEach(d => {
-                    const g = d.data(); total += g.amount;
-                    if(cats.hasOwnProperty(g.category)) cats[g.category] += g.amount;
-                    stream.innerHTML += `<div class="flex justify-between p-4 bg-slate-50 rounded-2xl border-l-4 border-indigo-500"><p class="font-bold text-xs uppercase">${g.category}</p><p class="font-black">KES ${g.amount}</p></div>`;
+            onSnapshot(doc(db, "remittances", `${cId}_${prevWeek}`), (snap) => {
+                const b2bArea = document.getElementById('b2b-action-area');
+                const statusEl = document.getElementById('lw-status');
+                
+                if(snap.exists() && snap.data().status === 'remitted') {
+                    b2bArea.classList.add('hidden');
+                    statusEl.classList.remove('hidden');
+                } else {
+                    b2bArea.classList.remove('hidden');
+                    statusEl.classList.add('hidden');
+                }
+            });
+
+            onSnapshot(query(collection(db, "givings"), where("churchId", "==", cId)), (s) => {
+                let total = 0, lw = 0, tw = 0;
+                let types = { Tithe: 0, Offering: 0, Seed: 0 };
+                let members = {};
+                window.currentGivings = [];
+
+                s.forEach(d => {
+                    const g = d.data();
+                    window.currentGivings.push(g);
+                    total += g.amount;
+                    if(g.type in types) types[g.type] += g.amount;
+                    if(g.week === prevWeek) lw += g.amount;
+                    if(g.week === curWeek) tw += g.amount;
+                    if(!members[g.userName]) members[g.userName] = { lw: 0, tw: 0 };
+                    if(g.week === prevWeek) members[g.userName].lw += g.amount;
+                    if(g.week === curWeek) members[g.userName].tw += g.amount;
                 });
-                document.getElementById('ch-remit-val').innerText = `KES ${(total * 0.1).toLocaleString()}`;
-                renderChart('church-pie-chart', 'doughnut', Object.keys(cats), Object.values(cats), ['#4F46E5','#10B981','#F59E0B','#EF4444']);
+
+                const remAmt = lw * 0.05;
+                document.getElementById('c-total').innerText = total.toLocaleString();
+                document.getElementById('lw-total').innerText = lw.toLocaleString();
+                document.getElementById('lw-5per').innerText = remAmt.toLocaleString();
+                document.getElementById('lw-remaining').innerText = (lw - remAmt).toLocaleString();
+                document.getElementById('tw-total').innerText = tw.toLocaleString();
+                
+                syncChart('c-chart', 'bar', Object.keys(types), Object.values(types), 'Categories');
+                syncChart('c-trend', 'line', ['Previous', 'Current'], [lw, tw], 'Trend');
+
+                const mList = document.getElementById('c-member-list'); mList.innerHTML = '';
+                Object.entries(members).forEach(([name, val]) => {
+                    mList.innerHTML += `<div class="p-5 bg-slate-50 rounded-2xl flex justify-between items-center">
+                        <p class="text-[10px] font-black uppercase">${name}</p>
+                        <div class="text-[9px] font-bold">LW: ${val.lw} | <span class="text-indigo-600">TW: ${val.tw}</span></div>
+                    </div>`;
+                });
+
+                document.getElementById('btn-initiate-b2b').onclick = () => triggerB2B(cId, prevWeek, remAmt);
             });
         }
 
-        async function initMember() {
-            const chs = await getDocs(collection(db, "churches"));
-            if(!chs.empty) { 
-                detectedChurch = { id: chs.docs[0].id, ...chs.docs[0].data() }; 
-                document.getElementById('mem-loc-context').innerText = `Nearest: ${detectedChurch.name}`; 
-            }
-            onSnapshot(query(collection(db, "givings"), where("uid", "==", activeUser.uid)), (snap) => {
-                const hist = document.getElementById('mem-history');
-                if(!hist) return; hist.innerHTML = '';
-                const labels = []; const data = [];
-                snap.forEach(d => {
-                    const g = d.data(); labels.push(g.category); data.push(g.amount);
-                    hist.innerHTML += `<div class="glass p-4 flex justify-between items-center"><span>${g.category}</span><b class="text-indigo-600">KES ${g.amount}</b></div>`;
-                });
-                renderChart('mem-bar-chart', 'bar', labels, data, '#6366f1');
-            });
-        }
-
-        // C2B TRIGGER: MEMBER TO CHURCH
-        document.getElementById('mem-give-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const channel = document.querySelector('input[name="channel"]:checked').value;
-            const amount = parseFloat(document.getElementById('give-amt').value);
-            const phone = document.getElementById('give-phone').value;
-
-            if(channel === 'MPESA') {
+        // DYNAMIC PASTOR TO ORG B2B TRANSFERS VIA VERCEL DARAJA
+        window.triggerB2B = async (cId, wk, val) => {
+            if(confirm(`Confirm Real-time Sandbox B2B Transfer of KES ${val} to Org Till 999999?`)) {
                 try {
-                    const response = await fetch(`${https://give-bzn3.onrender.com}/api/stkpush`, {
+                    const response = await fetch(`${VERCEL_BACKEND_URL}/api/stkpush`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            amount: val,
+                            mpesaDestination: "174379", // Default Sandbox Test Shortcode
+                            accountRef: `REMIT-${cId}`,
+                            type: "B2B_REMITTANCE"
+                        })
+                    });
+                    
+                    const mpesaResult = await response.json();
+                    
+                    if (mpesaResult.ResponseCode === "0") {
+                        const receipt = "B2B-" + Math.random().toString(36).substring(7).toUpperCase();
+                        await setDoc(doc(db, "remittances", `${cId}_${wk}`), { 
+                            churchId: cId, week: wk, amount: val, status: 'remitted', receipt: receipt, timestamp: serverTimestamp() 
+                        });
+                        alert("B2B Request Dispatched successfully. Mock ID: " + receipt);
+                    } else {
+                        alert("Daraja rejected transaction execution: " + mpesaResult.ResponseDescription);
+                    }
+                } catch (err) {
+                    alert("Gateway Connection Error: " + err.message);
+                }
+            }
+        };
+
+        // --- MEMBER ---
+        function initMember(uid) {
+            showView('view-member');
+            getDocs(collection(db, "churches")).then(s => {
+                const sel = document.getElementById('g-dest'); sel.innerHTML = '';
+                s.forEach(d => sel.innerHTML += `<option value="${d.id}">${d.data().name}</option>`);
+            });
+
+            onSnapshot(query(collection(db, "givings"), where("uid", "==", uid), orderBy("createdAt", "desc")), (s) => {
+                const h = document.getElementById('m-history'); h.innerHTML = '';
+                let mTypes = { Tithe: 0, Offering: 0, Seed: 0 };
+                window.currentGivings = [];
+                s.forEach(d => {
+                    const g = d.data();
+                    window.currentGivings.push(g);
+                    if(g.type in mTypes) mTypes[g.type] += g.amount;
+                    h.innerHTML += `<div class="p-5 bg-white border border-slate-100 rounded-2xl flex justify-between">
+                        <p class="text-[10px] font-black uppercase">${g.type}</p>
+                        <span class="text-indigo-600 font-black italic">KES ${g.amount}</span>
+                    </div>`;
+                });
+                syncChart('m-chart', 'doughnut', Object.keys(mTypes), Object.values(mTypes), 'Portfolio');
+            });
+        }
+
+        // DYNAMIC MEMBER CHECKOUT ROUTER
+        document.getElementById('g-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const u = auth.currentUser;
+            const uSnap = await getDoc(doc(db, "users", u.uid));
+            const amt = parseFloat(document.getElementById('g-amt').value);
+            const method = document.getElementById('g-method').value;
+            const selectedChurchId = document.getElementById('g-dest').value;
+            const phone = document.getElementById('g-phone').value;
+
+            // Fetch the unique church Till/Paybill configurations from Firestore
+            const churchSnap = await getDoc(doc(db, "churches", selectedChurchId));
+            const churchData = churchSnap.data();
+            
+            // Priority matching: uses configured Till -> then Paybill -> fallback to standard sandbox shortcode
+            const targetMpesaDestination = churchData.till || churchData.paybill || "174379";
+
+            if (method === 'MPESA') {
+                if (!phone) return alert("Please present an M-Pesa phone number to receive the prompt");
+                
+                try {
+                    // Trigger the secure serverless process on Vercel
+                    const mpesaResponse = await fetch(`${VERCEL_BACKEND_URL}/api/stkpush`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             phone: phone,
-                            amount: amount,
-                            churchTill: detectedChurch.till,
-                            accountRef: activeUser.name
+                            amount: amt,
+                            mpesaDestination: targetMpesaDestination,
+                            accountRef: uSnap.data().name.substring(0, 12),
+                            type: document.getElementById('g-type').value
                         })
                     });
-                    alert(`FaithPay: M-Pesa STK Push initiated to ${detectedChurch.name}.`);
-                } catch (err) {
-                    alert("Connectivity Error: Ensure Render backend is running.");
+
+                    const mpesaResult = await mpesaResponse.json();
+                    if (mpesaResult.ResponseCode !== "0") {
+                        return alert("STK Push Failed: " + mpesaResult.CustomerMessage);
+                    }
+                    alert("STK Push Prompt dispatched to your phone. Complete by entering your PIN.");
+                } catch(err) {
+                    return alert("Payment Gateway Interruption: " + err.message);
                 }
             }
 
-            await addDoc(collection(db, "givings"), { uid: activeUser.uid, churchId: detectedChurch.id, amount, category: document.getElementById('give-cat').value, channel, createdAt: serverTimestamp() });
+            // Record transaction document tracking mapping locally
+            await addDoc(collection(db, "givings"), {
+                uid: u.uid, userName: uSnap.data().name,
+                churchId: selectedChurchId,
+                amount: amt, type: document.getElementById('g-type').value,
+                method: method, week: curWeek, createdAt: serverTimestamp()
+            });
+            
+            alert("Payment Logged successfully"); 
             e.target.reset();
         });
 
-        document.getElementById('form-church-crud').addEventListener('submit', async (e) => {
+        document.getElementById('c-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            await addDoc(collection(db, "churches"), { name: document.getElementById('c-name').value, location: document.getElementById('c-loc').value, adminEmail: document.getElementById('c-admin').value, till: document.getElementById('c-till').value, createdAt: serverTimestamp() });
-            closeModal('modal-church');
+            const id = document.getElementById('c-id').value;
+            const payload = {
+                name: document.getElementById('cn-name').value, 
+                location: document.getElementById('cn-loc').value,
+                adminEmail: document.getElementById('cn-admin').value,
+                paybill: document.getElementById('cn-pay').value,
+                till: document.getElementById('cn-till').value,
+                updatedAt: serverTimestamp()
+            };
+            if(id) await updateDoc(doc(db, "churches", id), payload);
+            else await addDoc(collection(db, "churches"), { ...payload, status: 'active', createdAt: serverTimestamp() });
+            closeM();
         });
 
-        function renderChart(id, type, labels, data, color) {
-            const el = document.getElementById(id); if(!el) return;
-            const ex = Chart.getChart(id); if(ex) ex.destroy();
-            new Chart(el, { type, data: { labels, datasets: [{ data, backgroundColor: color, borderRadius: 10 }] }, options: { plugins: { legend: { display: type === 'doughnut' } } } });
-        }
-
-        onAuthStateChanged(auth, u => { if(u) route(u.uid); else document.getElementById('view-auth').classList.add('active'); });
+        window.openM = () => document.getElementById('m-box').classList.remove('hidden');
+        window.closeM = () => document.getElementById('m-box').classList.add('hidden');
+        onAuthStateChanged(auth, u => u ? route(u.uid) : showView('view-auth'));
     </script>
 </body>
 </html>
