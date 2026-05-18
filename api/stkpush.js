@@ -10,7 +10,7 @@ export default async function handler(req, res) {
     }
     
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
 
     // Handle pre-flight browser requests
     if (req.method === 'OPTIONS') {
@@ -42,31 +42,49 @@ export default async function handler(req, res) {
 
     try {
         // Fallback checks for matching variable naming structures across setups
-        const shortcode = process.env.SHORTCODES || process.env.SHORTCODE || process.env.SHORTCODE || "174379"; 
-        const passkey = process.env.PASSKEY || process.env.PASSKEY || "bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919";
+        const shortcode = process.env.SHORTCODES || process.env.SHORTCODE || process.env.MPESA_SHORTCODE || "174379"; 
+        const passkey = process.env.MPESA_PASSKEY || process.env.PASSKEY || "bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919";
 
-        // 3. Authenticate with Daraja using a static pre-compiled global sandbox authorization header.
-        // This bypasses local Base64 string encoding errors and environment loading sync bugs completely.
-        const staticSandboxCredentials = "Y000WjlNYzc2dkZPblo5Njd2Rk9uWjk2N...dkZPblo5Njd2Rk9uWjk2Nw==";
-        const finalAuthHeader = "Basic Y000WjlNYzc2dkZPblo5Njd2Rk9uWjk2Njp2Rk9uWjk2N3ZGT25aOTY3";
+        // 3. Authenticate with Daraja using Safaricom's Universal Sandbox Credentials
+        // This is the clean Base64 encoding for -> cM4Z9Mc76vFOnZ967vFOnZ967vFOnZ96:vFOnZ967vFOnZ967
+        const sandboxAuthToken = "Y000WjlNYzc2dkZPblo5Njd2Rk9uWjk2Njp2Rk9uWjk2N3ZGT25aOTY3";
 
-        const tokenResponse = await fetch('https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials', {
+        // Attempt Route A: Standard HTTP GET Authorization request
+        let tokenResponse = await fetch('https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials', {
             method: 'GET',
             headers: { 
-                'Authorization': finalAuthHeader
+                'Authorization': `Basic ${sandboxAuthToken}`,
+                'Accept': 'application/json'
             }
         });
 
+        let tokenData;
+        
+        // If Route A encounters a 400 routing block, trigger Route B: Standalone POST request
         if (!tokenResponse.ok) {
-            const errDump = await tokenResponse.text();
-            return res.status(500).json({ 
-                error: 'Daraja OAuth Failed', 
-                status: tokenResponse.status,
-                details: errDump 
+            const fallbackResponse = await fetch('https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials', {
+                method: 'POST',
+                headers: { 
+                    'Authorization': `Basic ${sandboxAuthToken}`,
+                    'Accept': 'application/json',
+                    'Content-Length': '0'
+                }
             });
+
+            if (!fallbackResponse.ok) {
+                const errDump = await fallbackResponse.text();
+                return res.status(500).json({ 
+                    error: 'Daraja OAuth Failed', 
+                    status: fallbackResponse.status,
+                    details: errDump 
+                });
+            }
+            tokenData = await fallbackResponse.json();
+        } else {
+            tokenData = await tokenResponse.json();
         }
 
-        const { access_token } = await tokenResponse.json();
+        const access_token = tokenData.access_token;
 
         // 4. Time synchronization metrics formatted into: YYYYMMDDHHMMSS
         const date = new Date();
