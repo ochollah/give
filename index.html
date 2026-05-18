@@ -269,7 +269,6 @@
             html2pdf().from(element).save(`${title}.pdf`);
         };
 
-        // --- AUTH FORM SYSTEM TRACE ---
         document.getElementById('auth-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const em = document.getElementById('a-email').value;
@@ -297,7 +296,6 @@
             else initMember(uid);
         }
 
-        // --- SUPER ADMIN ---
         function initSuper() {
             showView('view-super');
             onSnapshot(collection(db, "churches"), async (s) => {
@@ -353,7 +351,6 @@
             openM();
         };
 
-        // --- PASTOR DASHBOARD ---
         function initChurch(cId) {
             showView('view-church');
             
@@ -416,7 +413,6 @@
             });
         }
 
-        // DYNAMIC PASTOR TO ORG B2B TRANSFERS
         window.triggerB2B = async (cId, wk, val) => {
             if(confirm(`Confirm Real-time Sandbox B2B Transfer of KES ${val} to Org Till 999999?`)) {
                 try {
@@ -426,21 +422,29 @@
                         body: JSON.stringify({
                             amount: val,
                             mpesaDestination: "174379", 
-                            accountRef: `REMIT-${cId}`,
+                            accountRef: `REMIT${cId}`.replace(/[^a-zA-Z0-9]/g, '').substring(0, 12),
                             type: "B2B_REMITTANCE"
                         })
                     });
                     
-                    const mpesaResult = await response.json();
+                    const responseText = await response.text();
+                    let mpesaResult;
                     
-                    if (mpesaResult.ResponseCode === "0" || mpesaResult.MerchantRequestID) {
+                    try {
+                        mpesaResult = JSON.parse(responseText);
+                    } catch(jsonErr) {
+                        console.error("B2B text response:", responseText);
+                        return alert(`B2B parsing crash. Raw dump: ${responseText.substring(0, 150)}`);
+                    }
+                    
+                    if (response.status === 200 && (mpesaResult.ResponseCode === "0" || mpesaResult.MerchantRequestID)) {
                         const receipt = "B2B-" + Math.random().toString(36).substring(7).toUpperCase();
                         await setDoc(doc(db, "remittances", `${cId}_${wk}`), { 
                             churchId: cId, week: wk, amount: val, status: 'remitted', receipt: receipt, timestamp: serverTimestamp() 
                         });
                         alert("B2B Request Dispatched successfully. Mock ID: " + receipt);
                     } else {
-                        alert("Daraja rejected transaction execution: " + mpesaResult.ResponseDescription);
+                        alert("Daraja rejected transaction execution: " + (mpesaResult.CustomerMessage || mpesaResult.ResponseDescription));
                     }
                 } catch (err) {
                     alert("Gateway Connection Error: " + err.message);
@@ -448,7 +452,6 @@
             }
         };
 
-        // --- MEMBER ---
         function initMember(uid) {
             showView('view-member');
             onSnapshot(collection(db, "churches"), (s) => {
@@ -473,7 +476,6 @@
             });
         }
 
-        // DYNAMIC MEMBER CHECKOUT ROUTER
         document.getElementById('g-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const u = auth.currentUser;
@@ -490,6 +492,8 @@
             if (method === 'MPESA') {
                 if (!phone) return alert("Please present an M-Pesa phone number to receive the prompt");
                 
+                const cleanAccountRef = uSnap.data().name.replace(/[^a-zA-Z0-9]/g, '').substring(0, 12);
+
                 try {
                     const mpesaResponse = await fetch(`${VERCEL_BACKEND_URL}/api/stkpush`, {
                         method: 'POST',
@@ -498,15 +502,29 @@
                             phone: phone,
                             amount: amt,
                             mpesaDestination: targetMpesaDestination,
-                            accountRef: uSnap.data().name.substring(0, 12).replace(/\s+/g, ''),
+                            accountRef: cleanAccountRef || "FaithPayNode",
                             type: document.getElementById('g-type').value
                         })
                     });
 
-                    const mpesaResult = await mpesaResponse.json();
-                    if (mpesaResponse.status !== 200 && mpesaResult.ResponseCode !== "0") {
-                        return alert("STK Push Failed: " + (mpesaResult.CustomerMessage || mpesaResult.ResponseDescription));
+                    const responseText = await mpesaResponse.text();
+                    let mpesaResult;
+                    
+                    try {
+                        mpesaResult = JSON.parse(responseText);
+                    } catch (jsonErr) {
+                        console.error("Raw backend response payload:", responseText);
+                        return alert(`Backend System Crash! Vercel did not return JSON. Raw log: ${responseText.substring(0, 150)}...`);
                     }
+
+                    if (mpesaResponse.status !== 200 || mpesaResult.ResponseCode !== "0") {
+                        const errorMsg = mpesaResult.CustomerMessage || 
+                                         mpesaResult.ResponseDescription || 
+                                         mpesaResult.errorMessage || 
+                                         "Unknown Gateway Error Matrix";
+                        return alert("STK Push Failed: " + errorMsg);
+                    }
+                    
                     alert("STK Push Prompt dispatched to your phone.");
                 } catch(err) {
                     return alert("Payment Gateway Interruption: " + err.message);
