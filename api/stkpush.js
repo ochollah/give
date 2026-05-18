@@ -39,8 +39,8 @@ export default async function handler(req, res) {
     const formattedPhone = phone.replace(/^0/, '254').replace(/^\+/, '').trim();
 
     try {
-        const shortcode = process.env.SHORTCODES || process.env.SHORTCODE || process.env.MPESA_SHORTCODE || "174379"; 
-        const passkey = process.env.MPESA_PASSKEY || process.env.PASSKEY || "bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919";
+        const shortcode = process.env.SHORTCODES || process.env.SHORTCODE || process.env.SHORTCODE || "174379"; 
+        const passkey = process.env.PASSKEY || process.env.PASSKEY || "bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919";
 
         // Pre-encoded Base64 string for universal default sandbox keys
         const sandboxAuthToken = "Y000WjlNYzc2dkZPblo5Njd2Rk9uWjk2Njp2Rk9uWjk2N3ZGT25aOTY3";
