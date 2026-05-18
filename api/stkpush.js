@@ -42,10 +42,10 @@ export default async function handler(req, res) {
 
     try {
         // 3. Authenticate with Daraja using fixed variable names
-        const consumerKey = process.env.MPESA_CONSUMER_KEY;
-        const secretKey = process.env.MPESA_CONSUMER_SECRET; // Fixed from MPESA_CONSUMER_SECRET
-        const shortcode = process.env.SHORTCODES || process.env.MPESA_SHORTCODE || "174379"; 
-        const passkey = process.env.MPESA_PASSKEY;
+        const consumerKey = process.env.CONSUMER_KEY;
+        const secretKey = process.env.CONSUMER_SECRET; // Fixed from MPESA_CONSUMER_SECRET
+        const shortcode = process.env.SHORTCODES || process.env.SHORTCODE || "174379"; 
+        const passkey = process.env.PASSKEY;
 
         const credentials = Buffer.from(`${consumerKey}:${secretKey}`).toString('base64');
         
