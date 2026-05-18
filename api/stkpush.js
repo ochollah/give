@@ -42,8 +42,8 @@ export default async function handler(req, res) {
 
     try {
         // Fallback checks for matching variable naming structures across setups
-        const shortcode = process.env.SHORTCODES || process.env.SHORTCODE || process.env.MPESA_SHORTCODE || "174379"; 
-        const passkey = process.env.MPESA_PASSKEY || process.env.PASSKEY || "bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919";
+        const shortcode = process.env.SHORTCODES || process.env.SHORTCODE || process.env.SHORTCODE || "174379"; 
+        const passkey = process.env.PASSKEY || process.env.PASSKEY || "bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919";
 
         // 3. Authenticate with Daraja using Safaricom's Universal Sandbox Credentials
         // Pre-encoded Base64 string for default sandbox consumer key + secret combo
