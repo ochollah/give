@@ -64,16 +64,16 @@ export default async function handler(req, res) {
         // ENV VARIABLES
         // =========================
         const consumerKey =
-            process.env.MPESA_CONSUMER_KEY;
+            process.env.CONSUMER_KEY;
 
         const consumerSecret =
-            process.env.MPESA_CONSUMER_SECRET;
+            process.env.CONSUMER_SECRET;
 
         const shortcode =
-            process.env.MPESA_SHORTCODE || '174379';
+            process.env.SHORTCODE || '174379';
 
         const passkey =
-            process.env.MPESA_PASSKEY;
+            process.env.PASSKEY;
 
         if (!consumerKey || !consumerSecret || !passkey) {
             return res.status(500).json({
