@@ -1,7 +1,7 @@
 import https from 'https';
 
 export default async function handler(req, res) {
-    // 1. Dynamic CORS handling to stop frontend browser blocks
+    // 1. Production CORS handling
     const allowedOrigin = req.headers.origin;
     if (allowedOrigin && (allowedOrigin.includes('github.io') || allowedOrigin.includes('localhost'))) {
         res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
@@ -12,7 +12,6 @@ export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
 
-    // Handle pre-flight browser requests
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
     }
@@ -21,7 +20,7 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    // 2. Safe incoming body parsing
+    // 2. Body payload parsing
     let body = req.body;
     if (typeof body === 'string') {
         try {
@@ -40,63 +39,69 @@ export default async function handler(req, res) {
     const formattedPhone = phone.replace(/^0/, '254').replace(/^\+/, '').trim();
 
     try {
-        // Fallback variables pulled directly from environment configurations
+        // Read keys dynamically, falling back to Safaricom's baseline test parameters
         const consumerKey = (process.env.CONSUMER_KEY || process.env.MPESA_CONSUMER_KEY || "cM4Z9Mc76vFOnZ967vFOnZ967vFOnZ96").trim();
         const secretKey = (process.env.CONSUMER_SECRET || process.env.MPESA_SECRET_KEY || "vFOnZ967vFOnZ967").trim();
         const shortcode = (process.env.SHORTCODES || process.env.SHORTCODE || process.env.MPESA_SHORTCODE || "174379").trim(); 
         const passkey = (process.env.MPESA_PASSKEY || process.env.PASSKEY || "bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919").trim();
 
-        // Real-time generation of clean Authentication Header Token
-        const liveCredentials = Buffer.from(`${consumerKey}:${secretKey}`).toString('base64');
+        // Check if a live custom token is manually provided to bypass Safaricom's authentication completely
+        let access_token = process.env.MANUAL_DARADA_TOKEN || null;
 
-        // 3. Raw HTTP GET Request for Daraja Token using Node's Native Native HTTPS Module
-        // This strips out high-level framework wrappers that cause Safaricom's 400 errors.
-        const access_token = await new Promise((resolve, reject) => {
-            const options = {
-                hostname: 'sandbox.safaricom.co.ke',
-                path: '/oauth/v1/generate?grant_type=client_credentials',
-                method: 'GET',
-                headers: {
-                    'Authorization': `Basic ${liveCredentials}`,
-                    'Accept': 'application/json'
-                }
-            };
+        if (!access_token) {
+            const liveCredentials = Buffer.from(`${consumerKey}:${secretKey}`).toString('base64');
 
-            const reqToken = https.request(options, (resToken) => {
-                let data = '';
-                resToken.on('data', (chunk) => { data += chunk; });
-                resToken.on('end', () => {
-                    if (resToken.statusCode !== 200) {
-                        reject(new Error(`Status: ${resToken.statusCode}, Details: ${data}`));
-                        return;
+            // 3. Low-level HTTPS execution block for Token Request
+            access_token = await new Promise((resolve, reject) => {
+                const options = {
+                    hostname: 'sandbox.safaricom.co.ke',
+                    path: '/oauth/v1/generate?grant_type=client_credentials',
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Basic ${liveCredentials}`,
+                        'Accept': 'application/json'
                     }
-                    try {
-                        const parsed = JSON.parse(data);
-                        if (parsed.access_token) {
-                            resolve(parsed.access_token);
-                        } else {
-                            reject(new Error("Token absent in response schema."));
+                };
+
+                const reqToken = https.request(options, (resToken) => {
+                    let data = '';
+                    resToken.on('data', (chunk) => { data += chunk; });
+                    resToken.on('end', () => {
+                        if (resToken.statusCode !== 200) {
+                            reject(new Error(`Safaricom Gateway Rejected Credentials with Status ${resToken.statusCode}. Raw Response: ${data}`));
+                            return;
                         }
-                    } catch (e) {
-                        reject(new Error(`Failed to parse response payload: ${data}`));
-                    }
+                        try {
+                            const parsed = JSON.parse(data);
+                            if (parsed.access_token) {
+                                resolve(parsed.access_token);
+                            } else {
+                                reject(new Error("Valid payload received but access_token property was absent."));
+                            }
+                        } catch (e) {
+                            reject(new Error(`Failed to parse gateway payload: ${data}`));
+                        }
+                    });
                 });
-            });
 
-            reqToken.on('error', (err) => { reject(err); });
-            reqToken.end(); // Closes connection stream instantly ensuring 0 body footprint
-        }).catch(err => {
-            return { _failed: true, message: err.message };
-        });
-
-        if (access_token._failed) {
-            return res.status(500).json({ 
-                error: 'Daraja OAuth Gateway Rejection', 
-                details: access_token.message 
+                reqToken.on('error', (err) => { reject(err); });
+                reqToken.end();
+            }).catch(err => {
+                return { _failed: true, message: err.message };
             });
         }
 
-        // 4. Time synchronization metrics formatted into: YYYYMMDDHHMMSS
+        // Handle strict credential rejection errors gracefully
+        if (access_token._failed) {
+            return res.status(400).json({ 
+                error: 'Daraja OAuth Failed', 
+                status: 400,
+                details: access_token.message,
+                remedy: 'This happens when the public keys are blocked or expired on Safaricom. Create your own free developer account at developer.safaricom.co.ke, create an app, and add your own unique CONSUMER_KEY and CONSUMER_SECRET to your Vercel project settings.'
+            });
+        }
+
+        // 4. Timestamp Generation (YYYYMMDDHHMMSS)
         const date = new Date();
         const t = (n) => String(n).padStart(2, '0');
         const timestamp = `${date.getFullYear()}${t(date.getMonth() + 1)}${t(date.getDate())}${t(date.getHours())}${t(date.getMinutes())}${t(date.getSeconds())}`;
@@ -118,7 +123,7 @@ export default async function handler(req, res) {
             TransactionDesc: "Portal Contribution"
         });
 
-        // Fire off STK Push payload using standard native HTTPS infrastructure
+        // 6. Execute STK Push Request
         const stkResult = await new Promise((resolve, reject) => {
             const options = {
                 hostname: 'sandbox.safaricom.co.ke',
@@ -138,7 +143,7 @@ export default async function handler(req, res) {
                     try {
                         resolve(JSON.parse(data));
                     } catch (e) {
-                        reject(new Error(`STK parse crash: ${data}`));
+                        reject(new Error(`STK parse error: ${data}`));
                     }
                 });
             });
