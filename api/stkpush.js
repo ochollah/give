@@ -1,161 +1,243 @@
 import https from 'https';
 
 export default async function handler(req, res) {
-    // 1. Production CORS handling
-    const allowedOrigin = req.headers.origin;
-    if (allowedOrigin && (allowedOrigin.includes('github.io') || allowedOrigin.includes('localhost'))) {
-        res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
-    } else {
-        res.setHeader('Access-Control-Allow-Origin', '*');
-    }
-    
+
+    // =========================
+    // CORS
+    // =========================
+    const origin = req.headers.origin || '*';
+
+    res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
     }
 
     if (req.method !== 'POST') {
-        return res.status(405).json({ error: 'Method not allowed' });
+        return res.status(405).json({
+            error: 'Method not allowed'
+        });
     }
-
-    // 2. Body payload parsing
-    let body = req.body;
-    if (typeof body === 'string') {
-        try {
-            body = JSON.parse(body);
-        } catch (e) {
-            return res.status(400).json({ error: 'Malformed JSON payload body' });
-        }
-    }
-
-    const { phone, amount, accountRef } = body || {};
-    
-    if (!phone || !amount) {
-        return res.status(400).json({ error: 'Missing phone number or transaction amount configuration' });
-    }
-    
-    const formattedPhone = phone.replace(/^0/, '254').replace(/^\+/, '').trim();
 
     try {
-        // Read keys dynamically, falling back to Safaricom's baseline test parameters
-        const consumerKey = (process.env.CONSUMER_KEY || process.env.MPESA_CONSUMER_KEY || "cM4Z9Mc76vFOnZ967vFOnZ967vFOnZ96").trim();
-        const secretKey = (process.env.CONSUMER_SECRET || process.env.MPESA_SECRET_KEY || "vFOnZ967vFOnZ967").trim();
-        const shortcode = (process.env.SHORTCODES || process.env.SHORTCODE || process.env.MPESA_SHORTCODE || "174379").trim(); 
-        const passkey = (process.env.MPESA_PASSKEY || process.env.PASSKEY || "bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919").trim();
 
-        // Check if a live custom token is manually provided to bypass Safaricom's authentication completely
-        let access_token = process.env.MANUAL_DARADA_TOKEN || null;
+        // =========================
+        // BODY PARSING
+        // =========================
+        let body = req.body;
 
-        if (!access_token) {
-            const liveCredentials = Buffer.from(`${consumerKey}:${secretKey}`).toString('base64');
+        if (typeof body === 'string') {
+            body = JSON.parse(body);
+        }
 
-            // 3. Low-level HTTPS execution block for Token Request
-            access_token = await new Promise((resolve, reject) => {
-                const options = {
-                    hostname: 'sandbox.safaricom.co.ke',
-                    path: '/oauth/v1/generate?grant_type=client_credentials',
-                    method: 'GET',
-                    headers: {
-                        'Authorization': `Basic ${liveCredentials}`,
-                        'Accept': 'application/json'
-                    }
-                };
+        const { phone, amount, accountRef } = body;
 
-                const reqToken = https.request(options, (resToken) => {
-                    let data = '';
-                    resToken.on('data', (chunk) => { data += chunk; });
-                    resToken.on('end', () => {
-                        if (resToken.statusCode !== 200) {
-                            reject(new Error(`Safaricom Gateway Rejected Credentials with Status ${resToken.statusCode}. Raw Response: ${data}`));
-                            return;
-                        }
-                        try {
-                            const parsed = JSON.parse(data);
-                            if (parsed.access_token) {
-                                resolve(parsed.access_token);
-                            } else {
-                                reject(new Error("Valid payload received but access_token property was absent."));
-                            }
-                        } catch (e) {
-                            reject(new Error(`Failed to parse gateway payload: ${data}`));
-                        }
-                    });
+        if (!phone || !amount) {
+            return res.status(400).json({
+                error: 'Phone and amount are required'
+            });
+        }
+
+        // =========================
+        // FORMAT PHONE
+        // Converts:
+        // 0712345678 -> 254712345678
+        // +254712345678 -> 254712345678
+        // =========================
+        let formattedPhone = phone
+            .replace(/\s+/g, '')
+            .replace('+', '');
+
+        if (formattedPhone.startsWith('0')) {
+            formattedPhone = '254' + formattedPhone.substring(1);
+        }
+
+        if (!formattedPhone.startsWith('254')) {
+            return res.status(400).json({
+                error: 'Invalid Kenyan phone number'
+            });
+        }
+
+        // =========================
+        // ENV VARIABLES
+        // =========================
+        const consumerKey =
+            process.env.MPESA_CONSUMER_KEY;
+
+        const consumerSecret =
+            process.env.MPESA_CONSUMER_SECRET;
+
+        const shortcode =
+            process.env.MPESA_SHORTCODE || '174379';
+
+        const passkey =
+            process.env.MPESA_PASSKEY;
+
+        if (!consumerKey || !consumerSecret || !passkey) {
+            return res.status(500).json({
+                error: 'Missing MPESA environment variables'
+            });
+        }
+
+        // =========================
+        // GET ACCESS TOKEN
+        // =========================
+        const auth = Buffer.from(
+            `${consumerKey}:${consumerSecret}`
+        ).toString('base64');
+
+        const accessToken = await new Promise((resolve, reject) => {
+
+            const tokenReq = https.request({
+                hostname: 'sandbox.safaricom.co.ke',
+                path: '/oauth/v1/generate?grant_type=client_credentials',
+                method: 'GET',
+                headers: {
+                    Authorization: `Basic ${auth}`
+                }
+
+            }, (tokenRes) => {
+
+                let data = '';
+
+                tokenRes.on('data', chunk => {
+                    data += chunk;
                 });
 
-                reqToken.on('error', (err) => { reject(err); });
-                reqToken.end();
-            }).catch(err => {
-                return { _failed: true, message: err.message };
-            });
-        }
+                tokenRes.on('end', () => {
 
-        // Handle strict credential rejection errors gracefully
-        if (access_token._failed) {
-            return res.status(400).json({ 
-                error: 'Daraja OAuth Failed', 
-                status: 400,
-                details: access_token.message,
-                remedy: 'This happens when the public keys are blocked or expired on Safaricom. Create your own free developer account at developer.safaricom.co.ke, create an app, and add your own unique CONSUMER_KEY and CONSUMER_SECRET to your Vercel project settings.'
-            });
-        }
+                    try {
 
-        // 4. Timestamp Generation (YYYYMMDDHHMMSS)
+                        const result = JSON.parse(data);
+
+                        if (!result.access_token) {
+                            return reject(result);
+                        }
+
+                        resolve(result.access_token);
+
+                    } catch (err) {
+                        reject(err);
+                    }
+
+                });
+
+            });
+
+            tokenReq.on('error', reject);
+            tokenReq.end();
+
+        });
+
+        // =========================
+        // TIMESTAMP
+        // =========================
         const date = new Date();
-        const t = (n) => String(n).padStart(2, '0');
-        const timestamp = `${date.getFullYear()}${t(date.getMonth() + 1)}${t(date.getDate())}${t(date.getHours())}${t(date.getMinutes())}${t(date.getSeconds())}`;
-        
-        const password = Buffer.from(`${shortcode}${passkey}${timestamp}`).toString('base64');
 
-        // 5. Structure payload for Customer Paybill Online push sequence
-        const stkPayload = JSON.stringify({
+        const timestamp =
+            date.getFullYear().toString() +
+            String(date.getMonth() + 1).padStart(2, '0') +
+            String(date.getDate()).padStart(2, '0') +
+            String(date.getHours()).padStart(2, '0') +
+            String(date.getMinutes()).padStart(2, '0') +
+            String(date.getSeconds()).padStart(2, '0');
+
+        // =========================
+        // PASSWORD
+        // =========================
+        const password = Buffer.from(
+            shortcode + passkey + timestamp
+        ).toString('base64');
+
+        // =========================
+        // CALLBACK URL
+        // =========================
+        const callbackURL =
+            process.env.CALLBACK_URL ||
+            `https://${process.env.VERCEL_URL}/api/callback`;
+
+        // =========================
+        // STK PAYLOAD
+        // =========================
+        const payload = JSON.stringify({
             BusinessShortCode: shortcode,
             Password: password,
             Timestamp: timestamp,
-            TransactionType: "CustomerPayBillOnline",
-            Amount: Math.round(amount),
+            TransactionType: 'CustomerPayBillOnline',
+            Amount: Number(amount),
             PartyA: formattedPhone,
             PartyB: shortcode,
             PhoneNumber: formattedPhone,
-            CallBackURL: `https://${process.env.VERCEL_URL}/api/callback`,
-            AccountReference: accountRef ? accountRef.substring(0, 12) : "FaithPay",
-            TransactionDesc: "Portal Contribution"
+            CallBackURL: callbackURL,
+            AccountReference: accountRef || 'FaithPay',
+            TransactionDesc: 'Payment'
         });
 
-        // 6. Execute STK Push Request
-        const stkResult = await new Promise((resolve, reject) => {
-            const options = {
+        // =========================
+        // STK REQUEST
+        // =========================
+        const stkResponse = await new Promise((resolve, reject) => {
+
+            const stkReq = https.request({
+
                 hostname: 'sandbox.safaricom.co.ke',
                 path: '/mpesa/stkpush/v1/processrequest',
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${access_token}`,
-                    'Content-Type': 'application/json',
-                    'Content-Length': Buffer.byteLength(stkPayload)
-                }
-            };
 
-            const reqStk = https.request(options, (resStk) => {
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json',
+                    'Content-Length': Buffer.byteLength(payload)
+                }
+
+            }, (stkRes) => {
+
                 let data = '';
-                resStk.on('data', (chunk) => { data += chunk; });
-                resStk.on('end', () => {
-                    try {
-                        resolve(JSON.parse(data));
-                    } catch (e) {
-                        reject(new Error(`STK parse error: ${data}`));
-                    }
+
+                stkRes.on('data', chunk => {
+                    data += chunk;
                 });
+
+                stkRes.on('end', () => {
+
+                    try {
+
+                        const result = JSON.parse(data);
+
+                        resolve({
+                            statusCode: stkRes.statusCode,
+                            body: result
+                        });
+
+                    } catch (err) {
+                        reject(err);
+                    }
+
+                });
+
             });
 
-            reqStk.on('error', (err) => { reject(err); });
-            reqStk.write(stkPayload);
-            reqStk.end();
+            stkReq.on('error', reject);
+
+            stkReq.write(payload);
+            stkReq.end();
+
         });
 
-        return res.status(200).json(stkResult);
+        // =========================
+        // RETURN RESPONSE
+        // =========================
+        return res.status(200).json(stkResponse);
 
     } catch (error) {
-        return res.status(500).json({ error: 'Internal Gateway Exception', message: error.message });
+
+        return res.status(500).json({
+            error: 'STK Push Failed',
+            message: error.message
+        });
+
     }
+
 }
