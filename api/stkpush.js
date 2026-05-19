@@ -69,10 +69,10 @@ export default async function handler(req, res) {
         // =========================
         // ENV VARIABLES (NO FALLBACKS)
         // =========================
-        const consumerKey = process.env.MPESA_CONSUMER_KEY;
-        const consumerSecret = process.env.MPESA_CONSUMER_SECRET;
-        const shortcode = process.env.MPESA_SHORTCODE;
-        const passkey = process.env.MPESA_PASSKEY;
+        const consumerKey = process.env.CONSUMER_KEY;
+        const consumerSecret = process.env.CONSUMER_SECRET;
+        const shortcode = process.env.SHORTCODE;
+        const passkey = process.env.PASSKEY;
 
         const callbackURL =
             process.env.CALLBACK_URL ||
