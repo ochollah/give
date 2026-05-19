@@ -1,329 +1,266 @@
-import https from 'https';
+import https from "https";
 
 export default async function handler(req, res) {
 
-    // =========================================
-    // CORS
-    // =========================================
-    const origin = req.headers.origin || '*';
+    // =========================
+    // CORS (GitHub Pages safe)
+    // =========================
+    const origin = req.headers.origin || "*";
 
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-    if (req.method === 'OPTIONS') {
+    if (req.method === "OPTIONS") {
         return res.status(200).end();
     }
 
-    if (req.method !== 'POST') {
-        return res.status(405).json({
-            error: 'Method not allowed'
-        });
+    if (req.method !== "POST") {
+        return res.status(405).json({ error: "Method not allowed" });
     }
 
     try {
 
-        // =========================================
-        // BODY PARSING
-        // =========================================
+        // =========================
+        // PARSE BODY SAFELY
+        // =========================
         let body = req.body;
 
-        if (typeof body === 'string') {
+        if (typeof body === "string") {
             try {
                 body = JSON.parse(body);
             } catch (e) {
                 return res.status(400).json({
-                    error: 'Malformed JSON body'
+                    error: "Invalid JSON body"
                 });
             }
         }
 
-        const {
-            phone,
-            amount,
-            accountRef
-        } = body || {};
+        const { phone, amount, accountRef } = body || {};
 
         if (!phone || !amount) {
             return res.status(400).json({
-                error: 'Phone and amount are required'
+                error: "Phone and amount required"
             });
         }
 
-        // =========================================
-        // PHONE FORMAT
-        // =========================================
+        // =========================
+        // FORMAT PHONE NUMBER
+        // =========================
         let formattedPhone = phone
             .toString()
-            .trim()
-            .replace(/\s+/g, '')
-            .replace('+', '');
+            .replace(/\s+/g, "")
+            .replace("+", "");
 
-        // 0712345678 => 254712345678
-        if (formattedPhone.startsWith('0')) {
-            formattedPhone = '254' + formattedPhone.substring(1);
+        if (formattedPhone.startsWith("0")) {
+            formattedPhone = "254" + formattedPhone.substring(1);
         }
 
-        // 712345678 => 254712345678
-        if (formattedPhone.startsWith('7')) {
-            formattedPhone = '254' + formattedPhone;
+        if (formattedPhone.startsWith("7")) {
+            formattedPhone = "254" + formattedPhone;
         }
 
-        if (!formattedPhone.startsWith('254')) {
+        if (!formattedPhone.startsWith("254")) {
             return res.status(400).json({
-                error: 'Invalid Kenyan phone number format'
+                error: "Invalid Kenyan phone number"
             });
         }
 
-        // =========================================
-        // ENVIRONMENT VARIABLES
-        // =========================================
-        const consumerKey =
-            process.env.CONSUMER_KEY;
-
-        const consumerSecret =
-            process.env.CONSUMER_SECRET;
-
-        const shortcode =
-            process.env.SHORTCODE || '174379';
-
-        const passkey =
-            process.env.PASSKEY;
+        // =========================
+        // ENV VARIABLES (NO FALLBACKS)
+        // =========================
+        const consumerKey = process.env.MPESA_CONSUMER_KEY;
+        const consumerSecret = process.env.MPESA_CONSUMER_SECRET;
+        const shortcode = process.env.MPESA_SHORTCODE;
+        const passkey = process.env.MPESA_PASSKEY;
 
         const callbackURL =
             process.env.CALLBACK_URL ||
             `https://${process.env.VERCEL_URL}/api/callback`;
 
-        if (
-            !consumerKey ||
-            !consumerSecret ||
-            !passkey
-        ) {
+        if (!consumerKey || !consumerSecret || !shortcode || !passkey) {
             return res.status(500).json({
-                error: 'Missing MPESA environment variables'
+                error: "Missing MPESA environment variables"
             });
         }
 
-        // =========================================
-        // GENERATE TOKEN
-        // =========================================
+        // =========================
+        // GET ACCESS TOKEN (SAFE)
+        // =========================
         const auth = Buffer.from(
             `${consumerKey}:${consumerSecret}`
-        ).toString('base64');
+        ).toString("base64");
 
         const accessToken = await new Promise((resolve, reject) => {
 
-            const tokenReq = https.request({
-
-                hostname: 'sandbox.safaricom.co.ke',
-                path: '/oauth/v1/generate?grant_type=client_credentials',
-                method: 'GET',
-
+            const options = {
+                hostname: "sandbox.safaricom.co.ke",
+                path: "/oauth/v1/generate?grant_type=client_credentials",
+                method: "GET",
                 headers: {
                     Authorization: `Basic ${auth}`,
-                    Accept: 'application/json'
-                }
+                    Accept: "application/json",
+                    "User-Agent": "Mozilla/5.0",
+                    Connection: "close"
+                },
+                timeout: 15000
+            };
 
-            }, (tokenRes) => {
+            const reqToken = https.request(options, (tokenRes) => {
 
-                let data = '';
+                let data = "";
 
-                tokenRes.on('data', (chunk) => {
-                    data += chunk;
-                });
+                tokenRes.on("data", chunk => data += chunk);
 
-                tokenRes.on('end', () => {
+                tokenRes.on("end", () => {
 
-                    console.log('TOKEN RAW RESPONSE:', data);
+                    console.log("TOKEN STATUS:", tokenRes.statusCode);
+                    console.log("TOKEN RAW:", data);
+
+                    if (!data) {
+                        return reject(new Error("Empty token response"));
+                    }
 
                     try {
+                        const parsed = JSON.parse(data);
 
-                        if (!data || data.trim() === '') {
-                            return reject(
-                                new Error('Empty token response from Safaricom')
-                            );
+                        if (!parsed.access_token) {
+                            return reject(new Error("No access_token returned"));
                         }
 
-                        const result = JSON.parse(data);
-
-                        if (!result.access_token) {
-                            return reject(
-                                new Error(`Access token missing: ${data}`)
-                            );
-                        }
-
-                        resolve(result.access_token);
+                        resolve(parsed.access_token);
 
                     } catch (err) {
-
-                        reject(
-                            new Error(`Token JSON parse failed: ${data}`)
-                        );
-
+                        reject(new Error("Token JSON error: " + data));
                     }
 
                 });
 
             });
 
-            tokenReq.on('error', (err) => {
-                reject(
-                    new Error(`Token request failed: ${err.message}`)
-                );
+            reqToken.on("error", reject);
+
+            reqToken.on("timeout", () => {
+                reqToken.destroy();
+                reject(new Error("Token request timeout"));
             });
 
-            tokenReq.end();
-
+            reqToken.end();
         });
 
-        // =========================================
+        // =========================
         // TIMESTAMP
-        // =========================================
-        const date = new Date();
+        // =========================
+        const now = new Date();
 
         const timestamp =
-            date.getFullYear().toString() +
-            String(date.getMonth() + 1).padStart(2, '0') +
-            String(date.getDate()).padStart(2, '0') +
-            String(date.getHours()).padStart(2, '0') +
-            String(date.getMinutes()).padStart(2, '0') +
-            String(date.getSeconds()).padStart(2, '0');
+            now.getFullYear() +
+            String(now.getMonth() + 1).padStart(2, "0") +
+            String(now.getDate()).padStart(2, "0") +
+            String(now.getHours()).padStart(2, "0") +
+            String(now.getMinutes()).padStart(2, "0") +
+            String(now.getSeconds()).padStart(2, "0");
 
-        // =========================================
+        // =========================
         // PASSWORD
-        // =========================================
+        // =========================
         const password = Buffer.from(
             shortcode + passkey + timestamp
-        ).toString('base64');
+        ).toString("base64");
 
-        // =========================================
+        // =========================
         // STK PAYLOAD
-        // =========================================
-        const stkPayload = JSON.stringify({
-
+        // =========================
+        const payload = JSON.stringify({
             BusinessShortCode: shortcode,
-
             Password: password,
-
             Timestamp: timestamp,
-
-            TransactionType: 'CustomerPayBillOnline',
-
+            TransactionType: "CustomerPayBillOnline",
             Amount: Math.round(Number(amount)),
-
             PartyA: formattedPhone,
-
             PartyB: shortcode,
-
             PhoneNumber: formattedPhone,
-
             CallBackURL: callbackURL,
-
-            AccountReference: (
-                accountRef || 'FaithPay'
-            ).substring(0, 12),
-
-            TransactionDesc: 'Portal Payment'
-
+            AccountReference: (accountRef || "PAYMENT").substring(0, 12),
+            TransactionDesc: "STK Push Payment"
         });
 
-        console.log('STK PAYLOAD:', stkPayload);
+        console.log("STK PAYLOAD:", payload);
 
-        // =========================================
+        // =========================
         // STK PUSH REQUEST
-        // =========================================
+        // =========================
         const stkResponse = await new Promise((resolve, reject) => {
 
-            const stkReq = https.request({
-
-                hostname: 'sandbox.safaricom.co.ke',
-
-                path: '/mpesa/stkpush/v1/processrequest',
-
-                method: 'POST',
-
+            const options = {
+                hostname: "sandbox.safaricom.co.ke",
+                path: "/mpesa/stkpush/v1/processrequest",
+                method: "POST",
                 headers: {
                     Authorization: `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json',
-                    'Content-Length': Buffer.byteLength(stkPayload)
-                }
+                    "Content-Type": "application/json",
+                    "Content-Length": Buffer.byteLength(payload),
+                    Connection: "close"
+                },
+                timeout: 15000
+            };
 
-            }, (stkRes) => {
+            const stkReq = https.request(options, (stkRes) => {
 
-                let data = '';
+                let data = "";
 
-                stkRes.on('data', (chunk) => {
-                    data += chunk;
-                });
+                stkRes.on("data", chunk => data += chunk);
 
-                stkRes.on('end', () => {
+                stkRes.on("end", () => {
 
-                    console.log('STK RAW RESPONSE:', data);
+                    console.log("STK STATUS:", stkRes.statusCode);
+                    console.log("STK RAW:", data);
+
+                    if (!data) {
+                        return reject(new Error("Empty STK response"));
+                    }
 
                     try {
 
-                        if (!data || data.trim() === '') {
-                            return reject(
-                                new Error('Empty STK response')
-                            );
-                        }
-
-                        let result;
-
-                        try {
-                            result = JSON.parse(data);
-                        } catch (e) {
-                            return reject(
-                                new Error(`Invalid STK JSON: ${data}`)
-                            );
-                        }
+                        const parsed = JSON.parse(data);
 
                         resolve({
-                            httpCode: stkRes.statusCode,
-                            response: result
+                            statusCode: stkRes.statusCode,
+                            response: parsed
                         });
 
                     } catch (err) {
-
-                        reject(
-                            new Error(`STK processing failed: ${err.message}`)
-                        );
-
+                        reject(new Error("STK JSON error: " + data));
                     }
 
                 });
 
             });
 
-            stkReq.on('error', (err) => {
+            stkReq.on("error", reject);
 
-                reject(
-                    new Error(`STK request failed: ${err.message}`)
-                );
-
+            stkReq.on("timeout", () => {
+                stkReq.destroy();
+                reject(new Error("STK request timeout"));
             });
 
-            stkReq.write(stkPayload);
-
+            stkReq.write(payload);
             stkReq.end();
-
         });
 
-        // =========================================
-        // SUCCESS RESPONSE
-        // =========================================
+        // =========================
+        // FINAL RESPONSE
+        // =========================
         return res.status(200).json(stkResponse);
 
     } catch (error) {
 
-        console.error('FULL ERROR:', error);
+        console.error("FULL ERROR:", error);
 
         return res.status(500).json({
             success: false,
-            error: 'STK Push Failed',
+            error: "STK Push Failed",
             message: error.message
         });
-
     }
-
-}
+                                              }
