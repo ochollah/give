@@ -41,17 +41,20 @@ export default async function handler(req, res) {
 
     try {
         // Fallback variables pulled directly from environment configurations
-        const consumerKey = process.env.CONSUMER_KEY || process.env.MPESA_CONSUMER_KEY || "cM4Z9Mc76vFOnZ967vFOnZ967vFOnZ96";
-        const secretKey = process.env.CONSUMER_SECRET || process.env.MPESA_SECRET_KEY || "vFOnZ967vFOnZ967";
-        const shortcode = process.env.SHORTCODES || process.env.SHORTCODE || process.env.MPESA_SHORTCODE || "174379"; 
-        const passkey = process.env.MPESA_PASSKEY || process.env.PASSKEY || "bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919";
+        const consumerKey = (process.env.CONSUMER_KEY || process.env.MPESA_CONSUMER_KEY || "cM4Z9Mc76vFOnZ967vFOnZ967vFOnZ96").trim();
+        const secretKey = (process.env.CONSUMER_SECRET || process.env.MPESA_SECRET_KEY || "vFOnZ967vFOnZ967").trim();
+        const shortcode = (process.env.SHORTCODES || process.env.SHORTCODE || process.env.MPESA_SHORTCODE || "174379").trim(); 
+        const passkey = (process.env.MPESA_PASSKEY || process.env.PASSKEY || "bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919").trim();
 
-        // 3. Dynamic Real-Time Generation of Authentication Header Token
-        // This avoids hardcoding expired static strings that generate 403 blocks
-        const liveCredentials = Buffer.from(`${consumerKey.trim()}:${secretKey.trim()}`).toString('base64');
+        // Real-time generation of clean Authentication Header Token
+        const liveCredentials = Buffer.from(`${consumerKey}:${secretKey}`).toString('base64');
 
-        // Execute traditional HTTP GET request sequence containing the query signature
-        const tokenResponse = await fetch('https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials', {
+        // 3. Clean HTTP GET Authentication targeting Safaricom's strict query pattern
+        // The URL is constructed using standard encoding parameters to eliminate 400 routing blocks.
+        const tokenUrl = new URL('https://sandbox.safaricom.co.ke/oauth/v1/generate');
+        tokenUrl.searchParams.append('grant_type', 'client_credentials');
+
+        const tokenResponse = await fetch(tokenUrl.toString(), {
             method: 'GET',
             headers: { 
                 'Authorization': `Basic ${liveCredentials}`,
