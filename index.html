@@ -487,6 +487,8 @@
 
             const churchSnap = await getDoc(doc(db, "churches", selectedChurchId));
             const churchData = churchSnap.data();
+            
+            // Check dynamic destination parameters or default to sandbox testing till
             const targetMpesaDestination = churchData.till || churchData.paybill || "174379";
 
             if (method === 'MPESA') {
@@ -495,6 +497,7 @@
                 const cleanAccountRef = uSnap.data().name.replace(/[^a-zA-Z0-9]/g, '').substring(0, 12);
 
                 try {
+                    // Send transaction details to backend so the callback function can map it back to this user context
                     const mpesaResponse = await fetch(`${VERCEL_BACKEND_URL}/api/stkpush`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -503,7 +506,11 @@
                             amount: amt,
                             mpesaDestination: targetMpesaDestination,
                             accountRef: cleanAccountRef || "FaithPayNode",
-                            type: document.getElementById('g-type').value
+                            userId: u.uid,
+                            userName: uSnap.data().name,
+                            churchId: selectedChurchId,
+                            type: document.getElementById('g-type').value,
+                            week: curWeek
                         })
                     });
 
@@ -525,21 +532,27 @@
                         return alert("STK Push Failed: " + errorMsg);
                     }
                     
-                    alert("STK Push Prompt dispatched to your phone.");
+                    alert("STK Push Prompt dispatched to your phone. The ledger will auto-update once you enter your M-Pesa PIN.");
+                    e.target.reset();
                 } catch(err) {
                     return alert("Payment Gateway Interruption: " + err.message);
                 }
+            } else {
+                // CASH Payments bypass backend queues and commit immediately to local ledger bounds
+                await addDoc(collection(db, "givings"), {
+                    uid: u.uid, 
+                    userName: uSnap.data().name,
+                    churchId: selectedChurchId,
+                    amount: amt, 
+                    type: document.getElementById('g-type').value,
+                    method: method, 
+                    week: curWeek, 
+                    createdAt: serverTimestamp()
+                });
+                
+                alert("Cash Payment Logged successfully"); 
+                e.target.reset();
             }
-
-            await addDoc(collection(db, "givings"), {
-                uid: u.uid, userName: uSnap.data().name,
-                churchId: selectedChurchId,
-                amount: amt, type: document.getElementById('g-type').value,
-                method: method, week: curWeek, createdAt: serverTimestamp()
-            });
-            
-            alert("Payment Logged successfully"); 
-            e.target.reset();
         });
 
         document.getElementById('c-form').addEventListener('submit', async (e) => {
