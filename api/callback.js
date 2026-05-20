@@ -7,7 +7,7 @@ if (!admin.apps.length) {
             credential: admin.credential.cert({
                 projectId: process.env.FIREBASE_PROJECT_ID,
                 clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-                // Replace escaped literal \n with actual newlines for Vercel
+                // Replace escaped literal \n with actual newlines for serverless backends
                 privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
             }),
         });
@@ -28,6 +28,7 @@ export default async function handler(req, res) {
         const stkCallback = req.body?.Body?.stkCallback;
 
         if (!stkCallback) {
+            console.error('Missing stkCallback in payload body');
             return res.status(400).json({ error: 'Invalid payload structure' });
         }
 
@@ -40,10 +41,11 @@ export default async function handler(req, res) {
         if (resultCode === 0) {
             const callbackMetadata = stkCallback.CallbackMetadata?.Item || [];
             
-            // Safaricom sends data as an array of objects, we need to extract the values
+            // Safe helper matching both normal string Value properties and numeric ones
             const getMetadataValue = (key) => {
                 const item = callbackMetadata.find(i => i.Name === key);
-                return item ? item.Value : null;
+                if (!item) return null;
+                return item.Value !== undefined ? item.Value : item.NumericValue;
             };
 
             const amount = getMetadataValue('Amount');
@@ -51,23 +53,57 @@ export default async function handler(req, res) {
             const phone = getMetadataValue('PhoneNumber');
             const transactionDate = getMetadataValue('TransactionDate'); // Format: YYYYMMDDHHMMSS
 
+            if (!receiptNumber) {
+                throw new Error(`Missing MpesaReceiptNumber for successful checkout: ${checkoutRequestID}`);
+            }
+
             // Write the successful transaction to Firestore
-            await db.collection('transactions').doc(receiptNumber).set({
+            const transactionRef = db.collection('transactions').doc(receiptNumber);
+            
+            await transactionRef.set({
                 merchantRequestID,
                 checkoutRequestID,
-                amount,
+                amount: Number(amount),
                 receiptNumber,
-                phone: phone.toString(),
-                transactionDate,
+                phone: phone ? phone.toString() : '',
+                transactionDate: transactionDate ? transactionDate.toString() : '',
                 status: 'Completed',
-                timestamp: admin.firestore.FieldValue.serverTimestamp()
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
             });
 
-            console.log(`Payment saved: ${receiptNumber} for KES ${amount}`);
+            console.log(`Payment logged: ${receiptNumber} for KES ${amount}`);
+
+            // ==============================================================
+            // OPTIONAL: RECONCILE SUBSCRIPTION / USER PRE-AUTH STATE HERE
+            // ==============================================================
+            // Querying your pending checkouts/invoices to activate subscriptions
+            const pendingQuery = await db.collection('pending_payments')
+                .where('checkoutRequestID', '==', checkoutRequestID)
+                .limit(1)
+                .get();
+
+            if (!pendingQuery.empty) {
+                const pendingDoc = pendingQuery.docs[0];
+                const paymentMeta = pendingDoc.data();
+
+                // If your architecture tracks active users or predictive engine models:
+                if (paymentMeta.userId) {
+                    await db.collection('users').doc(paymentMeta.userId).update({
+                        subscriptionStatus: 'Active',
+                        subscriptionExpiry: admin.firestore.FieldValue.serverTimestamp(), // Customize lifecycle offset
+                        lastReceiptNumber: receiptNumber
+                    });
+                    console.log(`Successfully provisioned subscription access for user: ${paymentMeta.userId}`);
+                }
+                
+                // Clean up or mark the pending reference request as filled
+                await pendingDoc.ref.update({ status: 'Fulfilled', receiptNumber });
+            }
+
         } else {
             // ResultCode !== 0 means the user cancelled, lacked funds, or timed out.
-            // You can optionally log failed attempts to a separate collection.
-            console.log(`Payment failed: ${resultDesc}`);
+            console.log(`Payment rejected/failed: Code ${resultCode} - ${resultDesc}`);
+            
             await db.collection('failed_transactions').doc(checkoutRequestID).set({
                 merchantRequestID,
                 checkoutRequestID,
@@ -75,10 +111,22 @@ export default async function handler(req, res) {
                 resultDesc,
                 timestamp: admin.firestore.FieldValue.serverTimestamp()
             });
+
+            // Fallback status updater if you keep records of pending orders
+            const pendingQuery = await db.collection('pending_payments')
+                .where('checkoutRequestID', '==', checkoutRequestID)
+                .limit(1)
+                .get();
+
+            if (!pendingQuery.empty) {
+                await pendingQuery.docs[0].ref.update({ 
+                    status: 'Failed', 
+                    failureReason: resultDesc 
+                });
+            }
         }
 
         // IMPORTANT: Always respond to Safaricom with a success message.
-        // If you don't, Safaricom will think the callback failed and retry sending it for 24 hours.
         return res.status(200).json({
             ResultCode: 0,
             ResultDesc: "Confirmation Received Successfully"
@@ -86,7 +134,7 @@ export default async function handler(req, res) {
 
     } catch (error) {
         console.error("Callback processing error:", error);
-        // Even on our internal errors, acknowledge Safaricom to prevent retry spam
+        // Even on internal database errors, acknowledge Safaricom to prevent endless 24hr retry loops
         return res.status(200).json({
             ResultCode: 0,
             ResultDesc: "Error processed but acknowledged"
